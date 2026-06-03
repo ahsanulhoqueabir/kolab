@@ -1,10 +1,12 @@
+import { Role } from './role.types';
+
 export interface Profile {
   id: string;
-  user: string;
-  email: string;
   name: string;
-  username: string | null;
-  role: string;
+  email: string;
+  phone?: string | null;
+  image?: string | null;
+  role?: Partial<Role> | string | null;
   created_at?: string;
   updated_at?: string;
 }
