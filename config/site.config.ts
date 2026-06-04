@@ -1,3 +1,5 @@
+import { app } from "./env.config";
+
 export interface NavSubItem {
   label: string;
   href: string;
@@ -16,8 +18,10 @@ export interface NavItem {
 
 export const siteConfig = {
   name: "Kolab",
-  description: "Smart Project & Task Collaboration System",
-  url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  description:
+    "Smart Project & Task Collaboration System. Manage projects, track tasks, and collaborate with your team in one unified platform.",
+  tagline: "Empower Your Team, Simplify Your Projects",
+  url: app.url || "http://localhost:3000",
   nav: {
     main: [
       {

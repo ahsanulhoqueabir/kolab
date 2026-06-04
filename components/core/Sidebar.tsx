@@ -24,6 +24,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { siteConfig } from "@/config/site.config";
 import type { NavItem } from "@/config/site.config";
 import { ElementType, useCallback, useState } from "react";
+import Image from "next/image";
 
 /** Map icon name strings from site config to actual Lucide components */
 const ICON_MAP: Record<string, ElementType> = {
@@ -43,10 +44,18 @@ const BOTTOM_ITEMS = siteConfig.nav.bottom as unknown as NavItem[];
 
 interface SidebarProps {
   collapsed: boolean;
+  mobileOpen: boolean;
   onToggle: () => void;
+  onMobileToggle: () => void;
+  onMobileClose: () => void;
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({
+  collapsed,
+  mobileOpen,
+  onToggle,
+  onMobileClose,
+}: SidebarProps) {
   const pathname = usePathname();
   const { user, pages, logout } = useAuthStore();
   /** Compute which groups should be auto-expanded based on the current pathname */
@@ -115,29 +124,33 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile overlay */}
-      {!collapsed && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={onToggle}
-        />
-      )}
-
       <aside
         className={cn(
           "fixed top-0 left-0 z-50 h-full bg-sidebar border-r border-sidebar-border transition-all duration-300 flex flex-col",
-          collapsed ? "w-0 lg:w-16 overflow-hidden" : "w-64",
+          // Mobile: slide in/out based on mobileOpen
           "lg:relative lg:z-0",
+          mobileOpen
+            ? "translate-x-0 w-64"
+            : "-translate-x-full w-64 lg:translate-x-0",
+          collapsed ? "lg:w-16" : "lg:w-64",
         )}
       >
         {/* Logo */}
         <div className="flex items-center justify-between h-14 px-4 border-b border-sidebar-border">
-          {!collapsed && (
+          {/* On mobile, always show the logo. On desktop, hide when collapsed. */}
+          {(mobileOpen || !collapsed) && (
             <Link
               href="/dashboard"
-              className="font-bold text-lg text-sidebar-foreground"
+              className="flex items-center gap-2 font-bold text-lg text-sidebar-foreground"
             >
-              Kolab
+              <Image
+                src="/kolab.png"
+                alt="Logo"
+                className="h-8 w-auto"
+                height={24}
+                width={24}
+              />
+              <span>Kolab</span>
             </Link>
           )}
           <Button
@@ -156,7 +169,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <Button
             variant="ghost"
             size="icon-xs"
-            onClick={onToggle}
+            onClick={onMobileClose}
             className="text-sidebar-foreground lg:hidden"
           >
             <Menu className="h-4 w-4" />
@@ -173,8 +186,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
               return (
                 <div key={item.label} className="relative group/menu space-y-1">
-                  {collapsed ? (
-                    // Collapsed state: Icon only with hover popup menu
+                  {collapsed && !mobileOpen ? (
+                    // Desktop collapsed state: Icon only with hover popup menu
                     <div className="relative">
                       <button
                         onClick={onToggle}
@@ -256,6 +269,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                                 <Link
                                   key={sub.href}
                                   href={sub.href}
+                                  onClick={onMobileClose}
                                   className={cn(
                                     "flex items-center rounded-md px-3 py-1.5 text-sm transition-colors",
                                     subActive
@@ -280,7 +294,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 key={item.href}
                 item={item}
                 collapsed={collapsed}
+                mobileOpen={mobileOpen}
                 isActive={isActive(item.href || "")}
+                onMobileClose={onMobileClose}
               />
             );
           })}
@@ -294,11 +310,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 key={item.href}
                 item={item}
                 collapsed={collapsed}
+                mobileOpen={mobileOpen}
                 isActive={isActive(item.href || "")}
+                onMobileClose={onMobileClose}
               />
             ),
           )}
-          {collapsed ? (
+          {collapsed && !mobileOpen ? (
             <button
               onClick={handleLogout}
               className="flex items-center justify-center w-full py-2 text-sidebar-foreground/60 hover:text-sidebar-foreground"
@@ -332,28 +350,34 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 function SidebarItem({
   item,
   collapsed,
+  mobileOpen,
   isActive,
+  onMobileClose,
 }: {
   item: NavItem;
   collapsed: boolean;
+  mobileOpen: boolean;
   isActive: boolean;
+  onMobileClose?: () => void;
 }) {
   const Icon = ICON_MAP[item.icon] ?? LayoutDashboard;
+  const isCollapsed = collapsed && !mobileOpen;
 
   return (
     <Link
       href={item.href || "#"}
+      onClick={onMobileClose}
       className={cn(
         "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
         isActive
           ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
           : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50",
-        collapsed && "justify-center px-2",
+        isCollapsed && "justify-center px-2",
       )}
-      title={collapsed ? item.label : undefined}
+      title={isCollapsed ? item.label : undefined}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      {!collapsed && <span>{item.label}</span>}
+      {!isCollapsed && <span>{item.label}</span>}
     </Link>
   );
 }

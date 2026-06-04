@@ -16,3 +16,7 @@ export const r2 = {
   secret: process.env.R2_SECRET,
   publicUrl: process.env.R2_PUBLIC_URL,
 };
+
+export const app = {
+  url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+};
