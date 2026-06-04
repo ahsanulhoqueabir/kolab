@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth.store";
 import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const login = useAuthStore((s) => s.login);
   const isProcessing = useAuthStore((s) => s.isProcessing);
@@ -23,7 +24,8 @@ export default function LoginPage() {
 
     try {
       await login({ email, password });
-      router.push("/"); // redirect to home on success
+      const returnTo = searchParams.get("returnTo") || "/";
+      router.push(returnTo);
     } catch {
       // error is already set in the store
     }

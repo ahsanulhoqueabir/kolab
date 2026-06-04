@@ -7,3 +7,8 @@ export interface Role {
   created_at?: string;
   updated_at?: string;
 }
+
+export interface RoleRes extends Omit<Role, "permissions" | "pages"> {
+  permission?: { name: string }[] | null;
+  page?: { url: string }[] | null;
+}

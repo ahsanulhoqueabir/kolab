@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { withAuth } from "@/lib/api/auth-middleware";
 import { ProfileService } from "@/services/profile.service";
-import type { JwtPayload } from "@/types/business/user.types";
+import type { AuthenticatedUser } from "@/types/business/auth.types";
 import { fail, ok } from "@/lib/api/api-response";
 
 /**
@@ -12,8 +12,8 @@ import { fail, ok } from "@/lib/api/api-response";
  * (which contains the profile ID) is passed to the handler.
  */
 export const GET = withAuth(
-  async (_req: NextRequest, jwtPayload: JwtPayload) => {
-    const result = await ProfileService.getById(jwtPayload.profile);
+  async (_req: NextRequest, user: AuthenticatedUser) => {
+    const result = await ProfileService.getById(user.profile);
 
     if (!result.success) {
       return fail({ error: result.error, statusCode: 404 });
