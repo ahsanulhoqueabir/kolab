@@ -1,6 +1,7 @@
 import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
 import { Role } from "@/types/db/role.types";
+import { ProfileService } from "./profile.service";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ServiceResult<T = any> =
@@ -139,6 +140,31 @@ export class RoleService {
     }
   }
 
+  /**
+   * Find a role by its name (case-insensitive).
+   * Used by ProfileService.create to resolve the default role.
+   */
+  static async findByName(name: string): Promise<ServiceResult<Role>> {
+    try {
+      const supabase = getSupabaseServerClient();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: roles, error: sbError } = await (supabase as any)
+        .from(this.collection)
+        .select("id")
+        .ilike("name", name)
+        .limit(1);
+
+      if (sbError || !roles || roles.length === 0) {
+        return error(sbError?.message || `Role "${name}" not found`);
+      }
+
+      return success(roles[0] as Role);
+    } catch (err) {
+      return error((err as Error).message || "Failed to find role by name");
+    }
+  }
+
   static async valid(id: string): Promise<ServiceResult<Role>> {
     try {
       const supabase = getSupabaseServerClient();
@@ -204,19 +230,14 @@ export class RoleService {
     id: string,
   ): Promise<ServiceResult<{ canDelete: boolean; meta: { users: number } }>> {
     try {
-      const supabase = getSupabaseServerClient();
+      // Use ProfileService instead of querying profile table directly
+      const countResult = await ProfileService.countByRole(id);
 
-      // Count profiles with this role
-      const { count, error: sbError } = await supabase
-        .from("profile")
-        .select("id", { count: "exact", head: true })
-        .eq("role", id);
-
-      if (sbError) {
-        return error(sbError.message);
+      if (!countResult.success) {
+        return error(countResult.error);
       }
 
-      const totalCount = count || 0;
+      const totalCount = countResult.data;
 
       return success({
         canDelete: totalCount === 0,

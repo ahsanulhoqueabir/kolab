@@ -85,9 +85,12 @@ export async function signJwt(payload: JwtPayload): Promise<string> {
 export async function verifyJwt(token: string): Promise<JwtPayload | null> {
   try {
     const secret = getSecret();
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, secret, {
+      algorithms: ["HS256"],
+    });
     return payload as unknown as JwtPayload;
-  } catch {
+  } catch (err) {
+    console.error("[JWT] Token verification failed:", err);
     return null;
   }
 }
@@ -103,11 +106,20 @@ export async function verifyToken(
   try {
     const decoded = await verifyJwt(token);
 
-    if (
-      !decoded ||
-      !decoded.profile ||
-      typeof decoded.email !== "string"
-    ) {
+    if (!decoded) {
+      return {
+        valid: false,
+        error:
+          "Token verification failed. The token may be expired or invalid.",
+        errorType: "INVALID_TOKEN",
+      };
+    }
+
+    if (!decoded.profile || typeof decoded.email !== "string") {
+      console.error("[JWT] Token payload missing required fields:", {
+        hasProfile: !!decoded.profile,
+        emailType: typeof decoded.email,
+      });
       return {
         valid: false,
         error: "Invalid token payload",
@@ -190,8 +202,7 @@ export async function verifyToken(
     const errorMessage =
       error instanceof Error ? error.message : "Invalid token";
     const isExpired =
-      errorMessage.includes("expired") ||
-      errorMessage.includes("jwt expired");
+      errorMessage.includes("expired") || errorMessage.includes("jwt expired");
 
     return {
       valid: false,
