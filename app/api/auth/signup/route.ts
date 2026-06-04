@@ -1,57 +1,46 @@
 import { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/api-response";
 import { AuthService } from "@/services/auth.service";
-import { ProfileService } from "@/services/profile.service";
 import { signJwt } from "@/lib/api/jwt.helper";
-import { JwtPayload } from "@/types/business/user.types";
+import type { JwtPayload } from "@/types/business/user.types";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, name, username } = body;
+    const { email, password, name } = body;
 
     // Validate required fields
     if (!email || !password || !name) {
       return fail({ error: "Email, password, and name are required" });
     }
 
-    // Step 1: Create the user in Supabase Auth
-    const authResult = await AuthService.signUp(email, password);
+    // Create the user profile directly with Argon2 hashing
+    const signUpResult = await AuthService.signUp(email, password, name);
 
-    if (!authResult.success) {
-      return fail({ error: authResult.error });
+    if (!signUpResult.success) {
+      return fail({ error: signUpResult.error });
     }
 
-    // Step 2: Create the profile linked to the auth user
-    const profileResult = await ProfileService.create({
-      user: authResult.data.user.id,
-      email,
-      name,
-      username,
-    });
+    const user = signUpResult.data.user;
+    const roleStr =
+      typeof user.role === "string" ? user.role : (user.role as any)?.id || "";
 
-    if (!profileResult.success) {
-      // Profile creation failed — clean up the auth user
-      await AuthService.deleteUser(authResult.data.user.id);
-
-      return fail({
-        error: profileResult.error,
-        statusCode: 500,
-      });
-    }
-
-    const { data: profile } = profileResult;
     const jwtPayload: JwtPayload = {
-      profile: profile.id,
-      email: profile.email,
-      role: profile.role,
+      profile: user.id,
+      email: user.email,
+      role: roleStr,
     };
 
     const token = await signJwt(jwtPayload);
 
     return ok({
       data: {
-        user: profile,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: roleStr,
+        },
         token,
       },
       message: "User created successfully",
