@@ -24,8 +24,12 @@ export default function LoginPage() {
 
     try {
       await login({ email, password });
-      const returnTo = searchParams.get("returnTo") || "/";
-      router.push(returnTo);
+
+      // Redirect to the user's role landing page, or fall back to returnTo / dashboard
+      const { landingPage } = useAuthStore.getState();
+      const returnTo = searchParams.get("returnTo");
+      const target = returnTo || landingPage || "/dashboard";
+      router.push(target);
     } catch {
       // error is already set in the store
     }

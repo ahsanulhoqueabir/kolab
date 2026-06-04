@@ -4,7 +4,7 @@ import { mergeRequestPayload } from "@/lib/api/request-payload";
 import type { Role } from "@/types/db/role.types";
 import { ok, fail } from "@/lib/api/api-response";
 
-export const GET = withAuth(async () => {
+export const GET = withAuth()(async ({ req, user }) => {
   try {
     const result = await RoleService.list();
     if (result.success) {
@@ -16,9 +16,9 @@ export const GET = withAuth(async () => {
   }
 });
 
-export const POST = withAuth(async (request) => {
+export const POST = withAuth()(async ({ req }) => {
   try {
-    const body: unknown = await request.json();
+    const body: unknown = await req.json();
 
     if (Array.isArray(body)) {
       const roles = body as Array<Partial<Role>>;
@@ -63,10 +63,10 @@ export const POST = withAuth(async (request) => {
   }
 });
 
-export const PATCH = withAuth(async (request) => {
+export const PATCH = withAuth()(async ({ req }) => {
   try {
     const body = mergeRequestPayload<Partial<Role> & { id?: string }>(
-      await request.json(),
+      await req.json(),
     );
     const { id, ...rest } = body;
 

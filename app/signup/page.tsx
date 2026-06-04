@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth.store";
 import { Button } from "@/components/ui/button";
 
 export default function SignUpPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const signUp = useAuthStore((s) => s.signUp);
   const isProcessing = useAuthStore((s) => s.isProcessing);
@@ -17,15 +18,18 @@ export default function SignUpPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState("");
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     clearError();
 
     try {
-      await signUp({ email, password, name, username: username || undefined });
-      router.push("/"); // redirect to home on success
+      await signUp({ email, password, name });
+
+      // Redirect to the user's role landing page, or fall back to returnTo / dashboard
+      const { landingPage } = useAuthStore.getState();
+      const returnTo = searchParams.get("returnTo");
+      const target = returnTo || landingPage || "/dashboard";
+      router.push(target);
     } catch {
       // error is already set in the store
     }
@@ -62,28 +66,6 @@ export default function SignUpPage() {
               placeholder="John Doe"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="block w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-400"
-            />
-          </div>
-
-          {/* Username (optional) */}
-          <div>
-            <label
-              htmlFor="username"
-              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Username{" "}
-              <span className="text-zinc-400 dark:text-zinc-500">
-                (optional)
-              </span>
-            </label>
-            <input
-              id="username"
-              type="text"
-              autoComplete="username"
-              placeholder="johndoe"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
               className="block w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-400"
             />
           </div>
