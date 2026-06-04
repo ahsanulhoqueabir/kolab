@@ -1,44 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect } from "react";
 import { Activity, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ProtectedRoute } from "@/components/core/ProtectedRoute";
 import { PageAccessGuard } from "@/components/core/PageAccessGuard";
 import { ActivityLogList } from "@/components/hr/logs/ActivityLogList";
-import { api_client } from "@/lib/api/api-client";
-import type { LogListItem } from "@/types/db/logs.types";
+import { useLogStore } from "@/store/log.store";
 
 function ActivityLogPageContent() {
-  const [logs, setLogs] = useState<LogListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const pageSize = 20;
-
-  const fetchLogs = useCallback(async (pageNum: number, append = false) => {
-    try {
-      setIsLoading(true);
-      const offset = (pageNum - 1) * pageSize;
-      const res = await api_client.get(
-        `/logs?limit=${pageSize}&offset=${offset}`,
-      );
-      const data = res.data?.data || [];
-
-      if (append) {
-        setLogs((prev) => [...prev, ...data]);
-      } else {
-        setLogs(data);
-      }
-
-      setHasMore(data.length === pageSize);
-    } catch {
-      toast.error("Failed to load activities");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const { logs, isLoading, hasMore, page, fetchLogs, appendLogs } =
+    useLogStore();
 
   useEffect(() => {
     fetchLogs(1);
@@ -51,8 +24,7 @@ function ActivityLogPageContent() {
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
-    setPage(nextPage);
-    fetchLogs(nextPage, true);
+    appendLogs(nextPage);
   };
 
   return (

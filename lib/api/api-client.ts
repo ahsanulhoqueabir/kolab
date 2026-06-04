@@ -1,9 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from "axios";
-import {
-  useAuthStore,
-  selectIsAuthenticated,
-  selectHasPermission,
-} from "@/store/auth.store";
+import { useAuthStore, selectIsAuthenticated } from "@/store/auth.store";
 import { ServerNavigationHelper } from "./server-navigation-helper";
 
 /**

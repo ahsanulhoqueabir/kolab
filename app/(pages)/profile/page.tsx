@@ -14,13 +14,11 @@ import { PageAccessGuard } from "@/components/core/PageAccessGuard";
 import { useAuthStore } from "@/store/auth.store";
 import { useUserStore } from "@/store/user.store";
 import { useReturnUrl } from "@/hooks/use-return-url";
-
-interface ProfileFormData {
-  name: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-}
+import {
+  PROFILE_DEFAULT_VALUES,
+  PROFILE_VALIDATION_RULES,
+} from "@/schema/profile.schema";
+import type { ProfileFormData } from "@/types/db/profile.types";
 
 function ProfilePageContent() {
   const router = useRouter();
@@ -37,12 +35,7 @@ function ProfilePageContent() {
     getValues,
     formState: { errors },
   } = useForm<ProfileFormData>({
-    defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
-    },
+    defaultValues: PROFILE_DEFAULT_VALUES,
   });
 
   useEffect(() => {
@@ -108,13 +101,7 @@ function ProfilePageContent() {
                 <Label htmlFor="name">Name</Label>
                 <Input
                   id="name"
-                  {...register("name", {
-                    required: "Name is required",
-                    minLength: {
-                      value: 2,
-                      message: "Name must be at least 2 characters",
-                    },
-                  })}
+                  {...register("name", PROFILE_VALIDATION_RULES.name)}
                   className={errors.name ? "border-destructive" : ""}
                   disabled={isSubmitting}
                 />
@@ -130,13 +117,7 @@ function ProfilePageContent() {
                 <Input
                   id="email"
                   type="email"
-                  {...register("email", {
-                    required: "Email is required",
-                    pattern: {
-                      value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                      message: "Invalid email address",
-                    },
-                  })}
+                  {...register("email", PROFILE_VALIDATION_RULES.email)}
                   className={errors.email ? "border-destructive" : ""}
                   disabled={isSubmitting}
                 />
@@ -173,12 +154,7 @@ function ProfilePageContent() {
                   <Input
                     id="password"
                     type="password"
-                    {...register("password", {
-                      minLength: {
-                        value: 6,
-                        message: "Password must be at least 6 characters",
-                      },
-                    })}
+                    {...register("password", PROFILE_VALIDATION_RULES.password)}
                     className={errors.password ? "border-destructive" : ""}
                     disabled={isSubmitting}
                   />

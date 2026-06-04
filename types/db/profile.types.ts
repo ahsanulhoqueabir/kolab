@@ -12,3 +12,11 @@ export interface Profile {
   created_at?: string;
   updated_at?: string;
 }
+
+export interface ProfileFormData extends Omit<
+  Profile,
+  "id" | "created_at" | "updated_at" | "role"
+> {
+  confirmPassword?: string;
+  role: string;
+}

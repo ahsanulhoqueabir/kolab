@@ -12,3 +12,10 @@ export interface RoleRes extends Omit<Role, "permissions" | "pages"> {
   permission?: { name: string }[] | null;
   page?: { url: string }[] | null;
 }
+
+export interface CreateRoleParams extends Omit<
+  Role,
+  "id" | "created_at" | "updated_at"
+> {
+  landing_page: string;
+}
