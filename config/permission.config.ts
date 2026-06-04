@@ -16,7 +16,6 @@ import type {
 export const PERMISSION_MODULES: PermissionGroup[] = [
   {
     label: "Project Management",
-    labelKey: "permissions.modules.projects",
     permissions: [
       { resource: "project", action: "create" },
       { resource: "project", action: "read", condition: "all" },
@@ -28,7 +27,6 @@ export const PERMISSION_MODULES: PermissionGroup[] = [
   },
   {
     label: "Task Management",
-    labelKey: "permissions.modules.tasks",
     permissions: [
       { resource: "task", action: "create" },
       { resource: "task", action: "read", condition: "all" },
@@ -44,12 +42,10 @@ export const PERMISSION_MODULES: PermissionGroup[] = [
 
   {
     label: "Activity Log",
-    labelKey: "permissions.modules.log",
     permissions: [{ resource: "log", action: "read", condition: "all" }],
   },
   {
     label: "Dashboard",
-    labelKey: "permissions.modules.dashboard",
     permissions: [
       { resource: "dashboard", action: "read", condition: "all" },
       { resource: "dashboard", action: "read", condition: "own" },
@@ -57,7 +53,6 @@ export const PERMISSION_MODULES: PermissionGroup[] = [
   },
   {
     label: "Role Management",
-    labelKey: "permissions.modules.roles",
     permissions: [
       { resource: "role", action: "create" },
       { resource: "role", action: "read" },
@@ -67,7 +62,6 @@ export const PERMISSION_MODULES: PermissionGroup[] = [
   },
   {
     label: "User Management",
-    labelKey: "permissions.modules.users",
     permissions: [
       { resource: "user", action: "read" },
       { resource: "user", action: "create" },
@@ -78,7 +72,6 @@ export const PERMISSION_MODULES: PermissionGroup[] = [
   },
   {
     label: "System Settings",
-    labelKey: "permissions.modules.settings",
     permissions: [
       { resource: "settings", action: "read" },
       { resource: "settings", action: "update" },
