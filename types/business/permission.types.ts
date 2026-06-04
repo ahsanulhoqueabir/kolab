@@ -24,7 +24,6 @@ export interface Permission {
 
 export interface PermissionGroup {
   label: string;
-  labelKey: string;
   icon?: string;
   permissions: Permission[];
 }
