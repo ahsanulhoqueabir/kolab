@@ -41,18 +41,7 @@ export const PERMISSION_MODULES: PermissionGroup[] = [
       { resource: "task", action: "delete", condition: "own" },
     ],
   },
-  {
-    label: "Team Collaboration",
-    labelKey: "permissions.modules.team",
-    permissions: [
-      { resource: "team", action: "create", condition: "all" },
-      { resource: "team", action: "create", condition: "own" },
-      { resource: "team", action: "read", condition: "all" },
-      { resource: "team", action: "read", condition: "own" },
-      { resource: "team", action: "delete", condition: "all" },
-      { resource: "team", action: "delete", condition: "own" },
-    ],
-  },
+
   {
     label: "Activity Log",
     labelKey: "permissions.modules.log",
@@ -275,7 +264,7 @@ export const PAGE_TO_RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
 
   // Tasks
   "/tasks": ["task:read:all", "task:read:own", "task:read:assigned"],
-  "/tasks/create": ["task:create"],
+  "/tasks/create": ["task:create", "project:update:own"],
   "/tasks/[id]/edit": [
     "task:update:all",
     "task:update:own",
@@ -285,7 +274,7 @@ export const PAGE_TO_RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
   "/my-tasks": ["task:read:assigned"],
 
   // Team
-  "/team": ["team:read:all", "team:read:own"],
+  "/team": ["project:read:all", "project:read:own"],
 
   // Activity Log
   "/activity-log": ["log:read:all"],

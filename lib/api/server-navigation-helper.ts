@@ -57,7 +57,7 @@ export class ServerNavigationHelper {
 
       const returnUrl = window.location.pathname;
       if (returnUrl && returnUrl !== "/unauthorized") {
-        params.set("returnUrl", returnUrl);
+        params.set("returnTo", returnUrl);
       }
 
       const unauthorizedPath = `/unauthorized${
