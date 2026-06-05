@@ -19,6 +19,8 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
+  phone?: string | null;
+  image?: string | null;
   role: string;
   permissions?: string[];
   pages?: string[];

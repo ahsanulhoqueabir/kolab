@@ -176,6 +176,8 @@ export const useAuthStore = create<AuthStore>()(
             id: profile.id as string,
             email: profile.email as string,
             name: profile.name as string,
+            phone: (profile.phone as string) || null,
+            image: (profile.image as string) || null,
             role:
               typeof profile.role === "string"
                 ? (profile.role as string)

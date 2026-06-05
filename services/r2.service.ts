@@ -20,6 +20,8 @@ import {
   S3Client,
   type DeleteObjectsCommandInput,
 } from "@aws-sdk/client-s3";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
+import { Agent as HttpsAgent } from "https";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export class R2Service {
@@ -43,6 +45,13 @@ export class R2Service {
         accessKeyId: r2.key,
         secretAccessKey: r2.secret,
       },
+      requestHandler: new NodeHttpHandler({
+        httpsAgent: new HttpsAgent({
+          rejectUnauthorized: true,
+          keepAlive: true,
+          secureOptions: 0x10000000, // TLSv1_2_METHOD — forces TLS 1.2
+        }),
+      }),
     });
 
     return this.client;

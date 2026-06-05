@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { Plus } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/core/ui/card";
 import { Input } from "@/components/core/ui/input";
 import { Label } from "@/components/core/ui/label";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/core/ui/checkbox";
 import { CreatePageHeader } from "@/components/core/shared/CreatePageHeader";
 import { SearchComboBox } from "@/components/core/shared/SearchComboBox";
 import { useRoleStore } from "@/store/role.store";
@@ -343,17 +345,16 @@ export function UserForm({
                   {isEdit ? (
                     <div className="space-y-3">
                       <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={resetPassword}
-                          onChange={(e) => {
-                            setResetPassword(e.target.checked);
-                            if (!e.target.checked) {
+                          onCheckedChange={(checked) => {
+                            const isChecked = checked === true;
+                            setResetPassword(isChecked);
+                            if (!isChecked) {
                               setValue("password", "");
                               setValue("confirmPassword", "");
                             }
                           }}
-                          className="rounded border-gray-300 focus:ring-primary h-4 w-4 text-primary"
                           disabled={isSubmitting}
                         />
                         <span className="text-xs text-muted-foreground">
@@ -361,54 +362,63 @@ export function UserForm({
                         </span>
                       </label>
 
-                      {resetPassword && (
-                        <div className="space-y-3 animate-in fade-in-50 duration-200">
-                          <div className="space-y-2">
-                            <Input
-                              id="password"
-                              type="password"
-                              {...register(
-                                "password",
-                                PROFILE_VALIDATION_RULES.password,
+                      <AnimatePresence initial={false}>
+                        {resetPassword && (
+                          <motion.div
+                            key="password-fields"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.25, ease: "easeInOut" }}
+                            className="overflow-hidden space-y-3"
+                          >
+                            <div className="space-y-2">
+                              <Input
+                                id="password"
+                                type="password"
+                                {...register(
+                                  "password",
+                                  PROFILE_VALIDATION_RULES.password,
+                                )}
+                                placeholder="Enter new password"
+                                className={
+                                  errors.password ? "border-destructive" : ""
+                                }
+                                disabled={isSubmitting}
+                              />
+                              {errors.password && (
+                                <p className="text-sm text-destructive">
+                                  {errors.password.message}
+                                </p>
                               )}
-                              placeholder="Enter new password"
-                              className={
-                                errors.password ? "border-destructive" : ""
-                              }
-                              disabled={isSubmitting}
-                            />
-                            {errors.password && (
-                              <p className="text-sm text-destructive">
-                                {errors.password.message}
-                              </p>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            <Input
-                              id="confirmPassword"
-                              type="password"
-                              {...register("confirmPassword", {
-                                validate: (value) =>
-                                  !resetPassword ||
-                                  value === getValues("password") ||
-                                  "Passwords do not match",
-                              })}
-                              placeholder="Confirm new password"
-                              className={
-                                errors.confirmPassword
-                                  ? "border-destructive"
-                                  : ""
-                              }
-                              disabled={isSubmitting}
-                            />
-                            {errors.confirmPassword && (
-                              <p className="text-sm text-destructive">
-                                {errors.confirmPassword.message}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                            </div>
+                            <div className="space-y-2">
+                              <Input
+                                id="confirmPassword"
+                                type="password"
+                                {...register("confirmPassword", {
+                                  validate: (value) =>
+                                    !resetPassword ||
+                                    value === getValues("password") ||
+                                    "Passwords do not match",
+                                })}
+                                placeholder="Confirm new password"
+                                className={
+                                  errors.confirmPassword
+                                    ? "border-destructive"
+                                    : ""
+                                }
+                                disabled={isSubmitting}
+                              />
+                              {errors.confirmPassword && (
+                                <p className="text-sm text-destructive">
+                                  {errors.confirmPassword.message}
+                                </p>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   ) : (
                     <div className="space-y-2">

@@ -15,8 +15,9 @@ export interface Profile {
 
 export interface ProfileFormData extends Omit<
   Profile,
-  "id" | "created_at" | "updated_at" | "role"
+  "id" | "created_at" | "updated_at" | "role" | "password"
 > {
+  password?: string;
   confirmPassword?: string;
   role: string;
 }

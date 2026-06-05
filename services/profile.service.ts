@@ -1,5 +1,7 @@
 import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
+import { hashPassword } from "@/lib/api/argon2.helper";
+import { dbTimestamp } from "@/lib/date.utils";
 import type { Profile } from "@/types/db/profile.types";
 import { RoleService } from "./role.services";
 
@@ -188,6 +190,50 @@ export class ProfileService {
       return error(
         (err as Error).message || "Failed to count profiles by role",
       );
+    }
+  }
+
+  /**
+   * Update a profile's allowed fields (name, phone, image, password).
+   * Password is hashed automatically.
+   * Email, role, and active cannot be changed via this method.
+   */
+  static async update(
+    id: string,
+    params: Record<string, unknown>,
+  ): Promise<ServiceResult<Profile>> {
+    try {
+      const supabase = getSupabaseServerClient();
+      const updateData: Record<string, unknown> = {};
+
+      const allowedFields = ["name", "phone", "image", "password"];
+      for (const field of allowedFields) {
+        if (params[field] !== undefined) {
+          updateData[field] = params[field];
+        }
+      }
+
+      // Hash password if provided
+      if (updateData.password) {
+        updateData.password = await hashPassword(updateData.password as string);
+      }
+
+      updateData.updated_at = dbTimestamp();
+
+      const { data, error: sbError } = await supabase
+        .from(this.table)
+        .update(updateData)
+        .eq("id", id)
+        .select(this.fields.basic)
+        .single();
+
+      if (sbError || !data) {
+        return error(sbError?.message || "Failed to update profile");
+      }
+
+      return success(data as unknown as Profile);
+    } catch (err) {
+      return error((err as Error).message || "Failed to update profile");
     }
   }
 }

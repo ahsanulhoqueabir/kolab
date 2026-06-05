@@ -1,11 +1,13 @@
-import { ProfileFormData } from "@/types/db/profile.types";
+import type { ProfileFormData } from "@/types/db/profile.types";
 
 export const PROFILE_DEFAULT_VALUES: ProfileFormData = {
   name: "",
   email: "",
+  phone: "",
+  image: "",
   password: "",
-  role: "",
   confirmPassword: "",
+  role: "",
 };
 
 export const PROFILE_VALIDATION_RULES = {
@@ -18,6 +20,12 @@ export const PROFILE_VALIDATION_RULES = {
     pattern: {
       value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
       message: "Invalid email address",
+    },
+  },
+  phone: {
+    pattern: {
+      value: /^(\+?\d{1,4}[\s-]?)?\(?\d{1,4}\)?[\s-]?\d{1,4}[\s-]?\d{1,9}$/,
+      message: "Invalid phone number",
     },
   },
   password: {
