@@ -1,6 +1,11 @@
 import * as React from "react";
 import { User, Shield, Trash2 } from "lucide-react";
 import { Badge } from "@/components/core/ui/badge";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/core/ui/avatar";
 import { Button } from "@/components/ui/button";
 import type { TeamRole } from "@/types/db/team.types";
 import { formatDateInTimezone } from "@/lib/date.utils";
@@ -31,9 +36,15 @@ export function TeamMemberCard({ member, onRemove }: TeamMemberCardProps) {
     <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-            <User className="h-5 w-5 text-muted-foreground" />
-          </div>
+          <Avatar className="h-10 w-10">
+            {profile?.image ? (
+              <AvatarImage src={profile.image} alt={name} />
+            ) : (
+              <AvatarFallback>
+                <User className="h-5 w-5 text-muted-foreground" />
+              </AvatarFallback>
+            )}
+          </Avatar>
           <div>
             <span className="font-semibold block">{name}</span>
             <span className="text-sm text-muted-foreground">{email}</span>

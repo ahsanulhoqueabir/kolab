@@ -35,6 +35,8 @@ function EditUserPageContent() {
           setInitialData({
             name: user.name,
             email: user.email,
+            phone: user.phone || "",
+            image: user.image || "",
             role:
               typeof user.role === "string" ? user.role : user.role?.id || "",
             active: user.active ?? true,
@@ -60,6 +62,8 @@ function EditUserPageContent() {
       const updateData: Record<string, unknown> = {
         name: data.name,
         email: data.email,
+        phone: data.phone || null,
+        image: data.image || null,
         role: data.role,
         active: data.active,
       };

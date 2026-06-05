@@ -17,6 +17,7 @@ export interface UserListItem {
   id: string;
   name: string;
   email: string;
+  phone?: string | null;
   image: string | null;
   active: boolean;
   role: { id: string; name: string } | null;
@@ -29,6 +30,7 @@ export interface CreateUserParams {
   email: string;
   password: string;
   role: string;
+  phone?: string;
   image?: string;
 }
 
@@ -38,5 +40,6 @@ export interface UpdateUserParams {
   password?: string;
   role?: string;
   active?: boolean;
+  phone?: string;
   image?: string;
 }

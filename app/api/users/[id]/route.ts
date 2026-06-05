@@ -1,7 +1,40 @@
 import { UserService } from "@/services/user.service";
+import { R2Service } from "@/services/r2.service";
+import { LogService } from "@/services/log.service";
 import { withAuth } from "@/lib/api/auth-middleware";
 import { ok, fail } from "@/lib/api/api-response";
 import type { UpdateUserParams } from "@/types/db/user.types";
+
+/**
+ * Upload a base64 image to R2 and return the public URL.
+ * Returns null if no image or invalid format.
+ */
+async function uploadBase64Image(
+  rawImage: string,
+  prefix: string,
+): Promise<string | null> {
+  if (!rawImage) return null;
+
+  // Already a URL — keep as-is
+  if (rawImage.startsWith("http")) return rawImage;
+
+  // Base64 data URI → upload to R2
+  const mimeMatch = rawImage.match(/^data:(image\/(\w+));base64,/);
+  if (!mimeMatch) return null;
+
+  const ext = mimeMatch[2];
+  const base64Data = rawImage.replace(/^data:image\/\w+;base64,/, "");
+  const buffer = Buffer.from(base64Data, "base64");
+
+  const result = await R2Service.uploadObject({
+    body: buffer,
+    fileName: `${prefix}.${ext}`,
+    folder: "profiles",
+    contentType: mimeMatch[1],
+  });
+
+  return result.success && result.publicUrl ? result.publicUrl : null;
+}
 
 /**
  * GET /api/users/[id]
@@ -31,6 +64,8 @@ export const GET = withAuth({ permissions: "user:read" })(async ({
  * PATCH /api/users/[id]
  * Update a user. Requires user:update:all or user:update:own.
  * If user:update:own, the user can only update their own profile.
+ * Handles base64 image upload to R2 before updating.
+ * Creates an activity log entry (non-blocking).
  */
 export const PATCH = withAuth({
   permissions: ["user:update:all", "user:update:own"],
@@ -55,9 +90,31 @@ export const PATCH = withAuth({
     }
 
     const body = (await req.json()) as UpdateUserParams;
+
+    // ── Image handling: base64 → R2 ────────────────────────────
+    if (body.image !== undefined) {
+      if (!body.image) {
+        // Empty string → remove image
+        body.image = null as unknown as undefined;
+      } else if (body.image.startsWith("data:")) {
+        const imageUrl = await uploadBase64Image(body.image, `user-${id}`);
+        body.image = imageUrl || undefined;
+      }
+      // else: already an https URL → keep as-is
+    }
+
     const result = await UserService.update(id, body);
 
     if (result.success) {
+      // Non-blocking: log the activity
+      LogService.create({
+        actor: user.profile,
+        table: "profile",
+        row: id,
+        action: "UPDATE",
+        description: `User "${result.data.name || body.name || id}" updated`,
+      });
+
       return ok({ data: result.data });
     }
     return fail({ error: result.error || "USER_UPDATE_FAILED" });
@@ -69,9 +126,11 @@ export const PATCH = withAuth({
 /**
  * DELETE /api/users/[id]
  * Delete a user. Requires user:delete permission.
+ * Creates an activity log entry (non-blocking).
  */
 export const DELETE = withAuth({ permissions: "user:delete" })(async ({
   params,
+  user,
 }) => {
   try {
     const id = params.id;
@@ -104,9 +163,20 @@ export const DELETE = withAuth({ permissions: "user:delete" })(async ({
       });
     }
 
+    const deletedName =
+      statusResult.data.meta?.message || validResult.data?.name || id;
     const result = await UserService.delete(id);
 
     if (result.success) {
+      // Non-blocking: log the activity
+      LogService.create({
+        actor: user.profile,
+        table: "profile",
+        row: id,
+        action: "DELETE",
+        description: `User "${deletedName}" deleted`,
+      });
+
       return ok({ data: result.data });
     }
     return fail({ error: result.error || "USER_DELETE_FAILED" });

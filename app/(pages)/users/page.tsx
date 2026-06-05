@@ -2,6 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Plus, User, Trash2 } from "lucide-react";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/core/ui/avatar";
 import { Badge } from "@/components/core/ui/badge";
 import { ListPage } from "@/components/core/shared/list-page";
 import { useUserStore } from "@/store/user.store";
@@ -100,9 +105,15 @@ const UsersPageContent = () => {
         searchable: true,
         render: (value, item) => (
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-              <User className="h-4 w-4 text-muted-foreground" />
-            </div>
+            <Avatar className="h-8 w-8">
+              {item.image ? (
+                <AvatarImage src={item.image} alt={item.name} />
+              ) : (
+                <AvatarFallback>
+                  <User className="h-4 w-4 text-muted-foreground" />
+                </AvatarFallback>
+              )}
+            </Avatar>
             <div>
               <span className="font-medium block">{item.name}</span>
             </div>

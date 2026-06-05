@@ -22,6 +22,8 @@ function CreateUserPageContent() {
         email: data.email,
         password: data.password!,
         role: data.role,
+        phone: data.phone || undefined,
+        image: data.image || undefined,
       });
 
       if (result.success) {

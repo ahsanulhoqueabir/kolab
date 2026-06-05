@@ -118,6 +118,7 @@ export class UserService {
           email: params.email,
           password: hashedPassword,
           role: params.role,
+          phone: params.phone || null,
           image: params.image || null,
           active: true,
         })
@@ -172,6 +173,7 @@ export class UserService {
       if (params.email !== undefined) updateData.email = params.email;
       if (params.role !== undefined) updateData.role = params.role;
       if (params.active !== undefined) updateData.active = params.active;
+      if (params.phone !== undefined) updateData.phone = params.phone;
       if (params.image !== undefined) updateData.image = params.image;
 
       if (params.password) {

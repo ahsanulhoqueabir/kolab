@@ -1,7 +1,40 @@
 import { UserService } from "@/services/user.service";
+import { R2Service } from "@/services/r2.service";
+import { LogService } from "@/services/log.service";
 import { withAuth } from "@/lib/api/auth-middleware";
 import { ok, fail } from "@/lib/api/api-response";
 import type { CreateUserParams } from "@/types/db/user.types";
+
+/**
+ * Upload a base64 image to R2 and return the public URL.
+ * Returns null if no image or invalid format.
+ */
+async function uploadBase64Image(
+  rawImage: string,
+  prefix: string,
+): Promise<string | null> {
+  if (!rawImage) return null;
+
+  // Already a URL — keep as-is
+  if (rawImage.startsWith("http")) return rawImage;
+
+  // Base64 data URI → upload to R2
+  const mimeMatch = rawImage.match(/^data:(image\/(\w+));base64,/);
+  if (!mimeMatch) return null;
+
+  const ext = mimeMatch[2];
+  const base64Data = rawImage.replace(/^data:image\/\w+;base64,/, "");
+  const buffer = Buffer.from(base64Data, "base64");
+
+  const result = await R2Service.uploadObject({
+    body: buffer,
+    fileName: `${prefix}.${ext}`,
+    folder: "profiles",
+    contentType: mimeMatch[1],
+  });
+
+  return result.success && result.publicUrl ? result.publicUrl : null;
+}
 
 /**
  * GET /api/users
@@ -39,9 +72,12 @@ export const GET = withAuth({ permissions: "user:read" })(async ({ req }) => {
 /**
  * POST /api/users
  * Creates a new user. Requires user:create permission.
+ * Handles base64 image upload to R2 before creating the user.
+ * Creates an activity log entry (non-blocking).
  */
 export const POST = withAuth({ permissions: "user:create" })(async ({
   req,
+  user,
 }) => {
   try {
     const body = (await req.json()) as CreateUserParams;
@@ -50,9 +86,27 @@ export const POST = withAuth({ permissions: "user:create" })(async ({
       return fail({ error: "USER_CREATE_BAD_REQUEST" });
     }
 
-    const result = await UserService.create(body);
+    // ── Image handling: base64 → R2 ────────────────────────────
+    let imageUrl: string | null | undefined = body.image;
+    if (body.image) {
+      imageUrl = await uploadBase64Image(body.image, `user-${Date.now()}`);
+    }
+
+    const result = await UserService.create({
+      ...body,
+      image: imageUrl || undefined,
+    });
 
     if (result.success) {
+      // Non-blocking: log the activity
+      LogService.create({
+        actor: user.profile,
+        table: "profile",
+        row: result.data.id,
+        action: "CREATE",
+        description: `User "${body.name}" created`,
+      });
+
       return ok({
         data: result.data,
         statusCode: 201,
