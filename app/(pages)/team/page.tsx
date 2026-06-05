@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Users, RefreshCw, Search } from "lucide-react";
 import { Input } from "@/components/core/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,7 @@ import { AddMemberDialog } from "@/components/hr/team/AddMemberDialog";
 import { WorkloadSummary } from "@/components/hr/team/WorkloadSummary";
 import { useTeamStore } from "@/store/team.store";
 import { useProjectStore } from "@/store/project.store";
-import { useReturnUrl } from "@/hooks/use-return-url";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { ListPageHeader } from "@/components/core/shared/ListPageHeader";
 import {
   Select,
@@ -24,13 +23,12 @@ import {
 } from "@/components/core/ui/select";
 
 function TeamPageContent() {
-  const { withReturnUrl } = useReturnUrl("/team");
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const action = searchParams.get("action");
 
-  const [isAddOpen, setIsAddOpen] = useState(false);
-
-  const members = useTeamStore((state) => state.members);
+  const members = useTeamStore((state) => state.items);
   const workload = useTeamStore((state) => state.workload);
   const isLoading = useTeamStore((state) => state.isLoading);
   const fetchTeamMembers = useTeamStore((state) => state.fetchTeamMembers);
@@ -38,11 +36,16 @@ function TeamPageContent() {
   const removeMember = useTeamStore((state) => state.removeMember);
   const fetchWorkload = useTeamStore((state) => state.fetchWorkload);
 
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore((state) => state.items);
   const fetchProjects = useProjectStore((state) => state.fetchProjects);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const isAddOpen = useMemo(
+    () => action === "add" && !!selectedProjectId,
+    [action, selectedProjectId],
+  );
 
   useEffect(() => {
     fetchProjects();
@@ -55,15 +58,6 @@ function TeamPageContent() {
       fetchWorkload(selectedProjectId);
     }
   }, [selectedProjectId, fetchTeamMembers, fetchWorkload]);
-
-  // Auto-open Add Member dialog when action === "add" and a project is selected
-  useEffect(() => {
-    if (action === "add" && selectedProjectId) {
-      setIsAddOpen(true);
-    } else {
-      setIsAddOpen(false);
-    }
-  }, [action, selectedProjectId]);
 
   const handleAddMember = async (
     profileId: string,
@@ -171,7 +165,11 @@ function TeamPageContent() {
               projectId={selectedProjectId}
               onAdd={handleAddMember}
               open={isAddOpen}
-              onOpenChange={setIsAddOpen}
+              onOpenChange={(open) => {
+                if (!open) {
+                  router.replace(pathname);
+                }
+              }}
             />
 
             <div className="relative ml-auto">

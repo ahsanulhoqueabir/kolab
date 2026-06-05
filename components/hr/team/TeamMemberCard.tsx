@@ -3,6 +3,7 @@ import { User, Shield, Trash2 } from "lucide-react";
 import { Badge } from "@/components/core/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { TeamRole } from "@/types/db/team.types";
+import { formatDateInTimezone } from "@/lib/date.utils";
 
 interface TeamMemberCardProps {
   member: {
@@ -53,7 +54,7 @@ export function TeamMemberCard({ member, onRemove }: TeamMemberCardProps) {
           {member.role === "MANAGER" ? "Manager" : "Member"}
         </Badge>
         <span className="text-xs text-muted-foreground ml-auto">
-          Joined {new Date(member.created_at).toLocaleDateString()}
+          Joined {formatDateInTimezone(member.created_at)}
         </span>
       </div>
     </div>

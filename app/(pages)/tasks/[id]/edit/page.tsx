@@ -19,8 +19,8 @@ function EditTaskPageContent() {
   const taskId = params.id as string;
 
   const { getTaskById, updateTask } = useTaskStore();
-  const { projects, fetchProjects } = useProjectStore();
-  const { users, fetchUsers } = useUserStore();
+  const { items: projects, fetchProjects } = useProjectStore();
+  const { items: users, fetchUsers } = useUserStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [initialData, setInitialData] = useState<CreateTaskParams | undefined>(

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import { TaskPriorityBadge } from "./TaskPriorityBadge";
 import type { TaskPriority, TaskStatus } from "@/types/db/task.types";
+import { formatDateInTimezone } from "@/lib/date.utils";
 
 interface TaskListCardProps {
   task: {
@@ -60,7 +61,7 @@ export function TaskListCard({ task, onEdit, onDelete }: TaskListCardProps) {
         {task.due_date && (
           <div className="flex items-center gap-1">
             <Calendar className="h-3 w-3" />
-            {new Date(task.due_date).toLocaleDateString()}
+            {formatDateInTimezone(task.due_date)}
           </div>
         )}
         {assigneeName && (

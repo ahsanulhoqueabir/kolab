@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader } from "@/components/core/ui/card";
 import { Badge } from "@/components/core/ui/badge";
 import { TaskStatusBadge } from "@/components/hr/tasks/TaskStatusBadge";
 import type { HighPriorityTask } from "@/services/dashboard.service";
+import { formatDateInTimezone } from "@/lib/date.utils";
+import { TaskStatus } from "@/types/db/task.types";
 
 interface HighPriorityTasksProps {
   tasks: HighPriorityTask[];
@@ -49,7 +51,7 @@ export function HighPriorityTasks({
                     >
                       {task.project_name}
                     </Badge>
-                    <TaskStatusBadge status={task.status as any} />
+                    <TaskStatusBadge status={task.status as TaskStatus} />
                     {task.assigned_to_name && (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <User className="h-3 w-3" />
@@ -60,7 +62,7 @@ export function HighPriorityTasks({
                 </div>
                 {task.due_date && (
                   <div className="text-xs text-muted-foreground shrink-0 ml-3">
-                    Due {new Date(task.due_date).toLocaleDateString()}
+                    Due {formatDateInTimezone(task.due_date)}
                   </div>
                 )}
               </div>

@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/core/ui/select";
+import { getTimezone } from "@/lib/date.utils";
 
 interface DatePickerProps {
   date?: Date;
@@ -38,7 +39,7 @@ export function DatePicker({
   className,
   disabled = false,
   id,
-  yearRange = { from: 1900, to: new Date().getFullYear() + 10 },
+  yearRange = { from: 2020, to: new Date().getFullYear() + 5 },
   disablePastDates = false,
 }: DatePickerProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -146,9 +147,27 @@ export function DatePicker({
           onMonthChange={setDisplayMonth}
           disabled={(date: Date) => {
             if (disablePastDates) {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              return date < today;
+              // Use the configured timezone (Asia/Dhaka) to determine "today"
+              const tz = getTimezone();
+              const formatter = new Intl.DateTimeFormat("en-CA", {
+                timeZone: tz,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              });
+              const parts = formatter.formatToParts(new Date());
+              const get = (type: string) =>
+                parseInt(parts.find((p) => p.type === type)?.value || "0", 10);
+              const todayInTz = new Date(
+                get("year"),
+                get("month") - 1,
+                get("day"),
+                0,
+                0,
+                0,
+                0,
+              );
+              return date < todayInTz;
             }
             return (
               date > new Date() || date < new Date(`${yearRange.from}-01-01`)

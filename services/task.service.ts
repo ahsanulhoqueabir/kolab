@@ -1,6 +1,12 @@
 import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
 import { LogService } from "@/services/log.service";
+import { paginated } from "@/lib/pagination";
+import {
+  dbTimestamp,
+  todayInTimezone,
+  todayStartInTimezone,
+} from "@/lib/date.utils";
 import type {
   Task,
   TaskListItem,
@@ -8,9 +14,9 @@ import type {
   UpdateTaskParams,
   TaskStatus,
 } from "@/types/db/task.types";
+import type { PaginatedData } from "@/types/types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceResult<T = any> =
+type ServiceResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
 
@@ -27,8 +33,7 @@ export class TaskService {
       const supabase = getSupabaseServerClient();
 
       // Validate: prevent duplicate task titles inside the same project
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: existing } = await (supabase as any)
+      const { data: existing } = await supabase
         .from(this.collection)
         .select("id")
         .eq("project", params.project)
@@ -42,15 +47,13 @@ export class TaskService {
       // Validate: prevent setting past dates as deadlines
       if (params.due_date) {
         const dueDate = new Date(params.due_date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = todayStartInTimezone();
         if (dueDate < today) {
           return error("Due date cannot be in the past");
         }
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .insert({
           title: params.title,
@@ -61,8 +64,8 @@ export class TaskService {
           status: params.status || "TODO",
           project: params.project,
           created_by: params.created_by,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_at: dbTimestamp(),
+          updated_at: dbTimestamp(),
         })
         .select()
         .single();
@@ -100,7 +103,7 @@ export class TaskService {
     conditions?: { own?: boolean; all?: boolean; assigned?: boolean };
     page?: number;
     pageSize?: number;
-  }): Promise<ServiceResult<{ tasks: TaskListItem[]; total: number }>> {
+  }): Promise<ServiceResult<PaginatedData<TaskListItem>>> {
     try {
       const supabase = getSupabaseServerClient();
       const page = filters?.page || 1;
@@ -108,8 +111,7 @@ export class TaskService {
       const start = (page - 1) * pageSize;
       const end = start + pageSize - 1;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query = (supabase as any)
+      const query = supabase
         .from(this.collection)
         .select(
           "id, title, description, due_date, priority, status, project (id, name), assigned_to (id, name), created_by (id, name), created_at, updated_at",
@@ -123,18 +125,18 @@ export class TaskService {
 
       if (!hasAll && filters?.profileId) {
         if (hasOwn && hasAssigned) {
-          query = query.or(
+          query.or(
             `created_by.eq.${filters.profileId},assigned_to.eq.${filters.profileId}`,
           );
         } else if (hasOwn) {
-          query = query.eq("created_by", filters.profileId);
+          query.eq("created_by", filters.profileId);
         } else if (hasAssigned) {
-          query = query.eq("assigned_to", filters.profileId);
+          query.eq("assigned_to", filters.profileId);
         }
       }
 
       if (filters?.search) {
-        query = query.or(
+        query.or(
           `title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`,
         );
       }
@@ -142,34 +144,32 @@ export class TaskService {
       if (filters?.status) {
         const statuses = filters.status.split(",");
         if (statuses.length === 1) {
-          query = query.eq("status", filters.status);
+          query.eq("status", filters.status);
         } else {
-          query = query.in("status", statuses);
+          query.in("status", statuses);
         }
       }
 
       if (filters?.priority) {
-        query = query.eq("priority", filters.priority);
+        query.eq("priority", filters.priority);
       }
 
       if (filters?.project) {
-        query = query.eq("project", filters.project);
+        query.eq("project", filters.project);
       }
 
       if (filters?.assignedTo) {
-        query = query.eq("assigned_to", filters.assignedTo);
+        query.eq("assigned_to", filters.assignedTo);
       }
 
       if (filters?.deadlineStatus && filters.deadlineStatus !== "all") {
         if (filters.deadlineStatus === "overdue") {
-          query = query
+          query
             .not("due_date", "is", null)
-            .lt("due_date", new Date().toISOString().split("T")[0])
+            .lt("due_date", todayInTimezone())
             .neq("status", "COMPLETED");
         } else if (filters.deadlineStatus === "upcoming") {
-          query = query
-            .not("due_date", "is", null)
-            .gte("due_date", new Date().toISOString().split("T")[0]);
+          query.not("due_date", "is", null).gte("due_date", todayInTimezone());
         }
       }
 
@@ -185,10 +185,14 @@ export class TaskService {
         return error(sbError.message);
       }
 
-      return success({
-        tasks: (data || []) as TaskListItem[],
-        total: count || 0,
-      });
+      return success(
+        paginated(
+          (data || []) as unknown as TaskListItem[],
+          count || 0,
+          page,
+          pageSize,
+        ),
+      );
     } catch (err) {
       return error((err as Error).message || "Failed to fetch tasks");
     }
@@ -201,8 +205,7 @@ export class TaskService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .select(
           "*, project (id, name), assigned_to (id, name), created_by (id, name), updated_by (id, name)",
@@ -233,19 +236,19 @@ export class TaskService {
       // Validate: prevent duplicate task titles inside the same project
       if (params.title) {
         // Get the current task to know its project
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: current } = await (supabase as any)
+        const { data: current } = await supabase
           .from(this.collection)
           .select("project, title")
           .eq("id", id)
           .single();
 
         if (current) {
-          const projectId = params.project || current.project;
+          const projectId =
+            params.project ||
+            ((current as Record<string, unknown>).project as string);
           const newTitle = params.title;
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: duplicate } = await (supabase as any)
+          const { data: duplicate } = await supabase
             .from(this.collection)
             .select("id")
             .eq("project", projectId)
@@ -264,16 +267,14 @@ export class TaskService {
       // Validate: prevent setting past dates as deadlines
       if (params.due_date) {
         const dueDate = new Date(params.due_date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = todayStartInTimezone();
         if (dueDate < today) {
           return error("Due date cannot be in the past");
         }
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updateData: Record<string, any> = {
-        updated_at: new Date().toISOString(),
+      const updateData: Record<string, unknown> = {
+        updated_at: dbTimestamp(),
       };
 
       if (params.title !== undefined) updateData.title = params.title;
@@ -291,8 +292,7 @@ export class TaskService {
       if (params.updated_by !== undefined)
         updateData.updated_by = params.updated_by;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .update(updateData)
         .eq("id", id)
@@ -341,12 +341,11 @@ export class TaskService {
         return error("Invalid status value");
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .update({
           status,
-          updated_at: new Date().toISOString(),
+          updated_at: dbTimestamp(),
           ...(updated_by ? { updated_by } : {}),
         })
         .eq("id", id)
@@ -386,15 +385,13 @@ export class TaskService {
       const supabase = getSupabaseServerClient();
 
       // Fetch task title before deleting for the log
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: task } = await (supabase as any)
+      const { data: task } = await supabase
         .from(this.collection)
         .select("title")
         .eq("id", id)
         .single();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: sbError } = await (supabase as any)
+      const { error: sbError } = await supabase
         .from(this.collection)
         .delete()
         .eq("id", id);
@@ -437,8 +434,7 @@ export class TaskService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query = (supabase as any)
+      const query = supabase
         .from(this.collection)
         .select(
           "id, title, description, due_date, priority, status, project (id, name), assigned_to (id, name), created_by (id, name), created_at, updated_at",
@@ -446,15 +442,15 @@ export class TaskService {
         .eq("project", projectId);
 
       if (filters?.status) {
-        query = query.eq("status", filters.status);
+        query.eq("status", filters.status);
       }
 
       if (filters?.priority) {
-        query = query.eq("priority", filters.priority);
+        query.eq("priority", filters.priority);
       }
 
       if (filters?.assignedTo) {
-        query = query.eq("assigned_to", filters.assignedTo);
+        query.eq("assigned_to", filters.assignedTo);
       }
 
       const { data, error: sbError } = await query.order("created_at", {
@@ -465,7 +461,7 @@ export class TaskService {
         return error(sbError.message);
       }
 
-      return success((data || []) as TaskListItem[]);
+      return success((data || []) as unknown as TaskListItem[]);
     } catch (err) {
       return error((err as Error).message || "Failed to fetch project tasks");
     }

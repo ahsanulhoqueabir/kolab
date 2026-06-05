@@ -13,6 +13,7 @@ import {
   Clock,
   ListChecks,
 } from "lucide-react";
+import { formatDateInTimezone } from "@/lib/date.utils";
 import { Badge } from "@/components/core/ui/badge";
 import { Card, CardContent } from "@/components/core/ui/card";
 import { Skeleton } from "@/components/core/ui/skeleton";
@@ -218,7 +219,7 @@ function ProjectDetailsPageContent() {
                   className={`text-sm font-semibold ${isOverdue ? "text-destructive" : ""}`}
                 >
                   {deadlineDate
-                    ? deadlineDate.toLocaleDateString("en-US", {
+                    ? formatDateInTimezone(project.deadline, {
                         month: "short",
                         day: "numeric",
                         year: "numeric",
@@ -253,7 +254,7 @@ function ProjectDetailsPageContent() {
                 </p>
                 <p className="text-sm font-semibold">
                   {project.created_at
-                    ? new Date(project.created_at).toLocaleDateString("en-US", {
+                    ? formatDateInTimezone(project.created_at, {
                         month: "short",
                         day: "numeric",
                         year: "numeric",

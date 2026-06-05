@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ProtectedRoute } from "@/components/core/ProtectedRoute";
 import { PageAccessGuard } from "@/components/core/PageAccessGuard";
+import { formatDateInTimezone } from "@/lib/date.utils";
 import { TaskStatusBadge } from "@/components/hr/tasks/TaskStatusBadge";
 import { TaskPriorityBadge } from "@/components/hr/tasks/TaskPriorityBadge";
 import { useReturnUrl } from "@/hooks/use-return-url";
@@ -24,7 +25,7 @@ function MyTasksPageContent() {
   const router = useRouter();
   const { withReturnUrl } = useReturnUrl("/my-tasks");
 
-  const tasks = useTaskStore((state) => state.tasks);
+  const tasks = useTaskStore((state) => state.items);
   const loading = useTaskStore((state) => state.isLoading);
   const fetchTasks = useTaskStore((state) => state.fetchTasks);
   const updateTaskStatus = useTaskStore((state) => state.updateTaskStatus);
@@ -129,7 +130,7 @@ function MyTasksPageContent() {
                 {task.due_date && (
                   <div className="flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
-                    {new Date(task.due_date).toLocaleDateString()}
+                    {formatDateInTimezone(task.due_date)}
                   </div>
                 )}
               </div>

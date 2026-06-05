@@ -1,5 +1,6 @@
 import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
+import { dbTimestamp } from "@/lib/date.utils";
 import type {
   Logs,
   LogListItem,
@@ -7,8 +8,7 @@ import type {
   LogAction,
 } from "@/types/db/logs.types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceResult<T = any> =
+type ServiceResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
 
@@ -30,7 +30,7 @@ export class LogService {
     try {
       const supabase = getSupabaseServerClient();
 
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .insert({
           id: crypto.randomUUID(),
@@ -39,7 +39,7 @@ export class LogService {
           row: params.row,
           action: params.action,
           description: params.description,
-          created_at: new Date().toISOString(),
+          created_at: dbTimestamp(),
         })
         .select()
         .single();
@@ -64,8 +64,7 @@ export class LogService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .select(
           "id, description, action, table, row, actor (id, name), created_at",
@@ -77,7 +76,7 @@ export class LogService {
         return error(sbError.message);
       }
 
-      return success((data || []) as LogListItem[]);
+      return success((data || []) as unknown as unknown as LogListItem[]);
     } catch (err) {
       return error((err as Error).message || "Failed to fetch logs");
     }
@@ -95,8 +94,7 @@ export class LogService {
 
       // Get logs where the row ID matches the project OR where the table is "task" and the project matches
       // Since we store the row ID, we fetch logs for the project itself
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .select(
           "id, description, action, table, row, actor (id, name), created_at",
@@ -109,7 +107,7 @@ export class LogService {
         return error(sbError.message);
       }
 
-      return success((data || []) as LogListItem[]);
+      return success((data || []) as unknown as LogListItem[]);
     } catch (err) {
       return error((err as Error).message || "Failed to fetch project logs");
     }

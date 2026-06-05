@@ -1,10 +1,12 @@
 import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
+import { paginated } from "@/lib/pagination";
 import { Role } from "@/types/db/role.types";
 import { ProfileService } from "./profile.service";
+import { dbTimestamp } from "@/lib/date.utils";
+import type { PaginatedData } from "@/types/types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceResult<T = any> =
+type ServiceResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
 
@@ -17,8 +19,7 @@ export class RoleService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: role, error: sbError } = await (supabase as any)
+      const { data: role, error: sbError } = await supabase
         .from(this.collection)
         .insert({
           name: data.name,
@@ -51,8 +52,7 @@ export class RoleService {
         pages: item.pages || [],
       }));
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: roles, error: sbError } = await (supabase as any)
+      const { data: roles, error: sbError } = await supabase
         .from(this.collection)
         .insert(insertData)
         .select();
@@ -75,15 +75,14 @@ export class RoleService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: role, error: sbError } = await (supabase as any)
+      const { data: role, error: sbError } = await supabase
         .from(this.collection)
         .update({
           name: data.name,
           landing_page: data.landing_page || null,
           permissions: data.permissions,
           pages: data.pages,
-          updated_at: new Date().toISOString(),
+          updated_at: dbTimestamp(),
         })
         .eq("id", data.id)
         .select()
@@ -99,21 +98,37 @@ export class RoleService {
     }
   }
 
-  static async list(): Promise<ServiceResult<{ roles: Role[] }>> {
+  static async list(filters?: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<ServiceResult<PaginatedData<Role>>> {
     try {
       const supabase = getSupabaseServerClient();
+      const page = filters?.page || 1;
+      const pageSize = filters?.pageSize || 50;
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize - 1;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: roles, error: sbError } = await (supabase as any)
+      const query = supabase
         .from(this.collection)
-        .select("*")
-        .order("name", { ascending: true });
+        .select("*", { count: "exact" });
+
+      if (filters?.search) {
+        query.ilike("name", `%${filters.search}%`);
+      }
+
+      const {
+        data: roles,
+        error: sbError,
+        count,
+      } = await query.order("name", { ascending: true }).range(start, end);
 
       if (sbError || !roles) {
         return error(sbError?.message || "Failed to fetch roles");
       }
 
-      return success({ roles: roles as Role[] });
+      return success(paginated(roles as Role[], count || 0, page, pageSize));
     } catch (err) {
       return error((err as Error).message || "Failed to fetch roles");
     }
@@ -123,8 +138,7 @@ export class RoleService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: role, error: sbError } = await (supabase as any)
+      const { data: role, error: sbError } = await supabase
         .from(this.collection)
         .select("*")
         .eq("id", id)
@@ -148,8 +162,7 @@ export class RoleService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: roles, error: sbError } = await (supabase as any)
+      const { data: roles, error: sbError } = await supabase
         .from(this.collection)
         .select("id")
         .ilike("name", name)
@@ -169,8 +182,7 @@ export class RoleService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: role, error: sbError } = await (supabase as any)
+      const { data: role, error: sbError } = await supabase
         .from(this.collection)
         .select("id, name")
         .eq("id", id)
@@ -190,8 +202,7 @@ export class RoleService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: sbError } = await (supabase as any)
+      const { error: sbError } = await supabase
         .from(this.collection)
         .delete()
         .eq("id", id);
@@ -210,8 +221,7 @@ export class RoleService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .select("id")
         .limit(1);
@@ -255,8 +265,7 @@ export class RoleService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: role, error: sbError } = await (supabase as any)
+      const { data: role, error: sbError } = await supabase
         .from(this.collection)
         .select("permissions")
         .eq("id", roleId)

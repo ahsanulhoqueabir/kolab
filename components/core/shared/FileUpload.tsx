@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import { Upload, X, FileIcon, AlertCircle } from "lucide-react";
+import { Upload, X, FileIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/core/ui/button";
 import { useUploadStore, type QueuedFile } from "@/store/upload.store";
@@ -162,7 +162,6 @@ export function FileUpload({
 
 function toastFileTooBig(name: string, max: number) {
   const mb = Math.round(max / 1024 / 1024);
-  // eslint-disable-next-line no-console
   console.warn(`"${name}" exceeds the ${mb} MB limit and was skipped.`);
 }
 

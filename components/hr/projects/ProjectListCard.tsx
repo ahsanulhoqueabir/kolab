@@ -3,6 +3,7 @@ import { FolderKanban, Edit, Trash2, Calendar } from "lucide-react";
 import { Badge } from "@/components/core/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ProjectStatus } from "@/types/db/project.types";
+import { formatDateInTimezone } from "@/lib/date.utils";
 
 interface ProjectListCardProps {
   project: {
@@ -68,7 +69,7 @@ export function ProjectListCard({
         {project.deadline && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <Calendar className="h-3 w-3" />
-            {new Date(project.deadline).toLocaleDateString()}
+            {formatDateInTimezone(project.deadline)}
           </div>
         )}
         <span className="text-xs text-muted-foreground ml-auto">

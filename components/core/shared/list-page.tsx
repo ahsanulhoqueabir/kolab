@@ -7,6 +7,11 @@ import {
   Trash2,
   ArrowUpDown,
   Eye,
+  MoreHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/core/ui/input";
@@ -17,8 +22,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/core/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/core/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/core/ui/dropdown-menu";
+import { Checkbox } from "@/components/core/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { ListPageHeader } from "@/components/core/shared/ListPageHeader";
+import {
+  ListPageSkeleton,
+  MobileListSkeleton,
+} from "@/components/core/shared/LoadingSkeleton";
 
 export interface ListPageColumn<T> {
   key: string;
@@ -85,6 +110,22 @@ export interface ListPageConfig<T> {
     pageSizeOptions?: number[];
     showPageSizeSelector?: boolean;
     showQuickJumper?: boolean;
+    /** Current page number (from server meta) */
+    currentPage?: number;
+    /** Total pages (from server meta) */
+    totalPages?: number;
+    /** Whether there is a next page */
+    hasNext?: boolean;
+    /** Whether there is a previous page */
+    hasPrev?: boolean;
+    /** Total record count */
+    total?: number;
+    /** Called when navigating to a specific page */
+    onNextPage?: () => void;
+    /** Called when navigating to the previous page */
+    onPrevPage?: () => void;
+    /** Called when navigating to a specific page number */
+    onGoToPage?: (page: number) => void;
   };
   onRefresh?: () => Promise<void>;
   onEdit?: (item: T) => void;
@@ -118,6 +159,7 @@ export function ListPage<T extends { id?: string | number }>({
   const [dynamicOptions, setDynamicOptions] = React.useState<
     Record<string, ListPageFilterOption[]>
   >({});
+  const [jumpValue, setJumpValue] = React.useState("");
 
   const handleFilterChange = (key: string, value: string) => {
     const next = { ...filterValues, [key]: value };
@@ -159,19 +201,27 @@ export function ListPage<T extends { id?: string | number }>({
     return result;
   }, [data, searchQuery, config.search, sortKey, sortOrder]);
 
-  // Pagination
+  // Pagination — use server-side meta when available, else client-side
+  const isServerPaginated = Boolean(config.pagination?.totalPages);
   const pageSize = config.pagination?.pageSize || 10;
-  const totalPages = Math.ceil(filteredData.length / pageSize);
+  const totalPages =
+    config.pagination?.totalPages ?? Math.ceil(filteredData.length / pageSize);
+  const effectiveCurrentPage = config.pagination?.currentPage ?? currentPage;
   const paginatedData = React.useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
+    if (isServerPaginated) {
+      // Server-side: data is already the current page's items
+      return data;
+    }
+    // Client-side: slice locally
+    const start = (effectiveCurrentPage - 1) * pageSize;
     return filteredData.slice(start, start + pageSize);
-  }, [filteredData, currentPage, pageSize]);
+  }, [data, filteredData, effectiveCurrentPage, pageSize, isServerPaginated]);
 
-  const toggleSelectAll = () => {
-    if (selectedIds.length === paginatedData.length) {
-      setSelectedIds([]);
-    } else {
+  const toggleSelectAll = (checked: boolean | string) => {
+    if (checked) {
       setSelectedIds(paginatedData.map((item) => String(item.id)));
+    } else {
+      setSelectedIds([]);
     }
   };
 
@@ -191,6 +241,37 @@ export function ListPage<T extends { id?: string | number }>({
       setSortOrder("asc");
     }
   };
+
+  function generatePageNumbers(
+    current: number,
+    total: number,
+  ): (number | "...")[] {
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+
+    const pages: (number | "...")[] = [];
+
+    if (current <= 4) {
+      for (let i = 1; i <= 5; i++) pages.push(i);
+      pages.push("...");
+      pages.push(total);
+    } else if (current >= total - 3) {
+      pages.push(1);
+      pages.push("...");
+      for (let i = total - 4; i <= total; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      pages.push("...");
+      pages.push(current - 1);
+      pages.push(current);
+      pages.push(current + 1);
+      pages.push("...");
+      pages.push(total);
+    }
+
+    return pages;
+  }
 
   return (
     <div className="space-y-6">
@@ -286,181 +367,206 @@ export function ListPage<T extends { id?: string | number }>({
 
       {/* Desktop Table */}
       <div className="hidden md:block rounded-md border bg-card text-card-foreground">
-        <table className="w-full text-sm border-collapse text-left">
-          <thead>
-            <tr className="border-b bg-muted/50 transition-colors">
-              {config.actions?.bulk?.enabled && (
-                <th className="p-3 w-10">
-                  <input
-                    type="checkbox"
-                    checked={
-                      paginatedData.length > 0 &&
-                      selectedIds.length === paginatedData.length
-                    }
-                    onChange={toggleSelectAll}
-                    className="rounded border-gray-300"
-                  />
-                </th>
-              )}
-              {config.columns.map((col) => (
-                <th
-                  key={col.key}
-                  style={col.width ? { width: `${col.width}%` } : undefined}
-                  className={cn(
-                    "p-3 font-medium text-muted-foreground select-none",
-                    col.sortable && "cursor-pointer hover:text-foreground",
-                    col.className,
-                  )}
-                  onClick={() => col.sortable && handleSort(col.key)}
-                >
-                  <div className="flex items-center gap-1.5">
-                    {col.label}
-                    {col.sortable && <ArrowUpDown className="h-3.5 w-3.5" />}
-                  </div>
-                </th>
-              ))}
-              {config.actions?.default && (
-                <th className="p-3 w-24 text-right">Actions</th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td
-                  colSpan={10}
-                  className="p-8 text-center text-muted-foreground"
-                >
-                  Loading data...
-                </td>
-              </tr>
-            ) : paginatedData.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={10}
-                  className="p-8 text-center text-muted-foreground"
-                >
-                  No records found
-                </td>
-              </tr>
-            ) : (
-              paginatedData.map((item) => {
-                const idStr = String(item.id);
-                return (
-                  <tr
-                    key={idStr}
-                    className="border-b transition-colors hover:bg-muted/30"
+        {loading ? (
+          <div className="p-0">
+            <ListPageSkeleton
+              rows={pageSize > 5 ? 5 : pageSize}
+              columns={config.columns.length}
+              filterCount={0}
+              showPagination={false}
+              showMobileView={false}
+              showBulkActions={false}
+            />
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {config.actions?.bulk?.enabled && (
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={
+                        paginatedData.length > 0 &&
+                        selectedIds.length === paginatedData.length
+                      }
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
+                )}
+                {config.columns.map((col) => (
+                  <TableHead
+                    key={col.key}
+                    style={col.width ? { width: `${col.width}%` } : undefined}
+                    className={cn(
+                      "select-none",
+                      col.sortable && "cursor-pointer hover:text-foreground",
+                      col.className,
+                    )}
+                    onClick={() => col.sortable && handleSort(col.key)}
                   >
-                    {config.actions?.bulk?.enabled && (
-                      <td className="p-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(idStr)}
-                          onChange={() => toggleSelect(idStr)}
-                          className="rounded border-gray-300"
-                        />
-                      </td>
-                    )}
-                    {config.columns.map((col) => {
-                      const value = (item as any)[col.key];
-                      return (
-                        <td
-                          key={col.key}
-                          className={cn("p-3 align-middle", col.className)}
-                        >
-                          {col.render
-                            ? col.render(value, item)
-                            : String(value ?? "")}
-                        </td>
-                      );
-                    })}
-                    {config.actions?.default && (
-                      <td className="p-3 align-middle text-right space-x-1">
-                        {config.actions.default.includes("view") &&
-                          config.onView && (
-                            <Button
-                              variant="outline"
-                              size="icon-xs"
-                              onClick={() => config.onView!(item)}
-                              title="View"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        {config.actions.default.includes("edit") &&
-                          config.onEdit && (
-                            <Button
-                              variant="edit"
-                              size="icon-xs"
-                              onClick={() => config.onEdit!(item)}
-                              title="Edit"
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        {config.actions.default.includes("delete") &&
-                          config.onDelete && (
-                            <Button
-                              variant="delete"
-                              size="icon-xs"
-                              onClick={() => config.onDelete!(idStr)}
-                              title="Delete"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                    <div className="flex items-center gap-1.5">
+                      {col.label}
+                      {col.sortable && <ArrowUpDown className="h-3.5 w-3.5" />}
+                    </div>
+                  </TableHead>
+                ))}
+                {config.actions?.default && (
+                  <TableHead className="w-14 text-right">Actions</TableHead>
+                )}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedData.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={10}
+                    className="h-32 text-center text-muted-foreground"
+                  >
+                    No records found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedData.map((item) => {
+                  const idStr = String(item.id);
+                  return (
+                    <TableRow key={idStr}>
+                      {config.actions?.bulk?.enabled && (
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.includes(idStr)}
+                            onCheckedChange={() => toggleSelect(idStr)}
+                          />
+                        </TableCell>
+                      )}
+                      {config.columns.map((col) => {
+                        const value = (item as any)[col.key];
+                        return (
+                          <TableCell
+                            key={col.key}
+                            className={cn("align-middle", col.className)}
+                          >
+                            {col.render
+                              ? col.render(value, item)
+                              : String(value ?? "")}
+                          </TableCell>
+                        );
+                      })}
+                      {config.actions?.default && (
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="h-8 w-8"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Actions</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              {config.actions.default.includes("view") &&
+                                config.onView && (
+                                  <DropdownMenuItem
+                                    onClick={() => config.onView!(item)}
+                                  >
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    <span>View</span>
+                                  </DropdownMenuItem>
+                                )}
+                              {config.actions.default.includes("edit") &&
+                                config.onEdit && (
+                                  <>
+                                    {config.actions.default.includes("view") &&
+                                      config.onView && (
+                                        <DropdownMenuSeparator />
+                                      )}
+                                    <DropdownMenuItem
+                                      onClick={() => config.onEdit!(item)}
+                                    >
+                                      <Edit className="h-4 w-4 mr-2" />
+                                      <span>Edit</span>
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              {config.actions.default.includes("delete") &&
+                                config.onDelete && (
+                                  <>
+                                    {(config.actions.default.includes("view") ||
+                                      config.actions.default.includes(
+                                        "edit",
+                                      )) && <DropdownMenuSeparator />}
+                                    <DropdownMenuItem
+                                      onClick={() => config.onDelete!(idStr)}
+                                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      <span>Delete</span>
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        )}
       </div>
 
       {/* Mobile view */}
       {mobileRender && (
-        <div className="grid grid-cols-1 gap-4 md:hidden">
+        <div className="md:hidden">
           {loading ? (
-            <div className="text-center p-8 text-muted-foreground">
-              Loading...
-            </div>
+            <MobileListSkeleton rows={pageSize > 4 ? 4 : pageSize} />
           ) : paginatedData.length === 0 ? (
             <div className="text-center p-8 text-muted-foreground">
               No records found
             </div>
           ) : (
-            paginatedData.map((item) => mobileRender(item))
+            <div className="grid grid-cols-1 gap-4">
+              {paginatedData.map((item) => mobileRender(item))}
+            </div>
           )}
         </div>
       )}
 
-      {/* Bulk action bar (if bottom) */}
+      {/* Bulk action bar */}
       {config.actions?.bulk?.enabled && selectedIds.length > 0 && (
-        <div className="flex items-center justify-between rounded-md border bg-muted/40 p-3 text-sm animate-in slide-in-from-bottom-2">
+        <div
+          className={cn(
+            "flex items-center justify-between rounded-md border bg-muted/40 p-3 text-sm",
+            config.actions.bulk.position === "top"
+              ? "animate-in slide-in-from-top-2"
+              : "animate-in slide-in-from-bottom-2",
+          )}
+        >
           <div className="flex items-center gap-2">
             <span className="font-medium">
-              {selectedIds.length} items selected
+              {selectedIds.length} item{selectedIds.length > 1 ? "s" : ""}{" "}
+              selected
             </span>
-            {config.actions.bulk.showClearButton && (
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setSelectedIds([])}
-              >
-                Clear
+            {config.actions.bulk.showClearButton !== false && (
+              <Button onClick={() => setSelectedIds([])}>
+                Clear selection
               </Button>
             )}
           </div>
           <div className="flex items-center gap-2">
             {config.actions.bulk.actions.map((act, idx) => {
               const Icon = act.icon;
+              const isDisabled =
+                act.requireSelection && selectedIds.length === 0;
               return (
                 <Button
                   key={idx}
                   variant={act.variant || "default"}
-                  size="xs"
+                  size="sm"
+                  disabled={isDisabled}
                   onClick={() => {
                     if (act.confirmMessage) {
                       if (window.confirm(act.confirmMessage)) {
@@ -484,26 +590,160 @@ export function ListPage<T extends { id?: string | number }>({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-end space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-          >
-            Previous
-          </Button>
-          <div className="text-sm font-medium text-muted-foreground">
-            Page {currentPage} of {totalPages}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 py-4">
+          {/* Info: showing X-Y of Z */}
+          {config.pagination?.total !== undefined && (
+            <div className="text-sm text-muted-foreground order-2 sm:order-1">
+              {(effectiveCurrentPage - 1) * pageSize + 1}–
+              {Math.min(
+                effectiveCurrentPage * pageSize,
+                config.pagination.total,
+              )}{" "}
+              of {config.pagination.total}
+            </div>
+          )}
+
+          {/* Page navigation */}
+          <div className="flex items-center gap-1 order-1 sm:order-2">
+            {/* First page (desktop only) */}
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => {
+                if (isServerPaginated) {
+                  config.pagination?.onGoToPage?.(1);
+                } else {
+                  setCurrentPage(1);
+                }
+              }}
+              disabled={effectiveCurrentPage === 1}
+              title="First page"
+              className="hidden sm:inline-flex"
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+
+            {/* Previous page */}
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => {
+                if (isServerPaginated) {
+                  config.pagination?.onPrevPage?.();
+                } else {
+                  setCurrentPage((p) => Math.max(1, p - 1));
+                }
+              }}
+              disabled={effectiveCurrentPage === 1}
+              title="Previous page"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            {/* Page numbers (desktop only) */}
+            <div className="hidden sm:flex items-center gap-1">
+              {generatePageNumbers(effectiveCurrentPage, totalPages).map(
+                (page, idx) =>
+                  page === "..." ? (
+                    <span
+                      key={`ellipsis-${idx}`}
+                      className="flex h-8 w-8 items-center justify-center text-xs text-muted-foreground"
+                    >
+                      ...
+                    </span>
+                  ) : (
+                    <Button
+                      key={page}
+                      variant={
+                        effectiveCurrentPage === page ? "default" : "outline"
+                      }
+                      size="icon-sm"
+                      className="min-w-8 h-8 text-xs"
+                      onClick={() => {
+                        if (isServerPaginated) {
+                          config.pagination?.onGoToPage?.(page as number);
+                        } else {
+                          setCurrentPage(page as number);
+                        }
+                      }}
+                    >
+                      {page}
+                    </Button>
+                  ),
+              )}
+            </div>
+
+            {/* Mobile: current page indicator */}
+            <span className="sm:hidden text-xs text-muted-foreground px-2 select-none">
+              {effectiveCurrentPage} / {totalPages}
+            </span>
+
+            {/* Next page */}
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => {
+                if (isServerPaginated) {
+                  config.pagination?.onNextPage?.();
+                } else {
+                  setCurrentPage((p) => Math.min(totalPages, p + 1));
+                }
+              }}
+              disabled={effectiveCurrentPage === totalPages}
+              title="Next page"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+
+            {/* Last page (desktop only) */}
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => {
+                if (isServerPaginated) {
+                  config.pagination?.onGoToPage?.(totalPages);
+                } else {
+                  setCurrentPage(totalPages);
+                }
+              }}
+              disabled={effectiveCurrentPage === totalPages}
+              title="Last page"
+              className="hidden sm:inline-flex"
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+
+            {/* Quick jumper */}
+            {config.pagination?.showQuickJumper && totalPages > 5 && (
+              <div className="flex items-center gap-1 ml-2">
+                <span className="text-xs text-muted-foreground hidden sm:inline">
+                  Go to
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={jumpValue}
+                  onChange={(e) => setJumpValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const p = parseInt(jumpValue, 10);
+                      if (p >= 1 && p <= totalPages) {
+                        if (isServerPaginated) {
+                          config.pagination?.onGoToPage?.(p);
+                        } else {
+                          setCurrentPage(p);
+                        }
+                        setJumpValue("");
+                      }
+                    }
+                  }}
+                  className="h-8 w-14 rounded-md border border-input bg-background px-1 text-xs text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  placeholder=""
+                />
+              </div>
+            )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-          >
-            Next
-          </Button>
         </div>
       )}
     </div>

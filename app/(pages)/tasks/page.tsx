@@ -16,6 +16,7 @@ import { TaskListCard } from "@/components/hr/tasks/TaskListCard";
 import { TaskStatusBadge } from "@/components/hr/tasks/TaskStatusBadge";
 import { TaskPriorityBadge } from "@/components/hr/tasks/TaskPriorityBadge";
 import { useReturnUrl } from "@/hooks/use-return-url";
+import { formatDateInTimezone } from "@/lib/date.utils";
 import {
   Select,
   SelectContent,
@@ -30,16 +31,20 @@ const TasksPageContent = () => {
   const router = useRouter();
   const { withReturnUrl } = useReturnUrl("/tasks");
 
-  const tasks = useTaskStore((state) => state.tasks);
+  const tasks = useTaskStore((state) => state.items);
+  const pagination = useTaskStore((state) => state.pagination);
   const loading = useTaskStore((state) => state.isLoading);
   const fetchTasks = useTaskStore((state) => state.fetchTasks);
   const refetchTasks = useTaskStore((state) => state.refetchTasks);
+  const goToPage = useTaskStore((state) => state.goToPage);
+  const nextPage = useTaskStore((state) => state.nextPage);
+  const prevPage = useTaskStore((state) => state.prevPage);
   const deleteTask = useTaskStore((state) => state.deleteTask);
 
   const fetchProjects = useProjectStore((state) => state.fetchProjects);
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore((state) => state.items);
   const fetchUsers = useUserStore((state) => state.fetchUsers);
-  const users = useUserStore((state) => state.users);
+  const users = useUserStore((state) => state.items);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pendingDeleteName, setPendingDeleteName] = useState<string>("");
@@ -167,13 +172,31 @@ const TasksPageContent = () => {
         sortable: true,
         render: (value) => {
           if (!value) return <span className="text-muted-foreground">—</span>;
-          const date = new Date(value as string);
-          const isOverdue = date < new Date();
+          const dueDate = new Date(value as string);
+          const tz = "Asia/Dhaka";
+          const todayParts = new Intl.DateTimeFormat("en-CA", {
+            timeZone: tz,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).formatToParts(new Date());
+          const get = (type: string) =>
+            parseInt(todayParts.find((p) => p.type === type)?.value || "0", 10);
+          const todayInTz = new Date(
+            get("year"),
+            get("month") - 1,
+            get("day"),
+            0,
+            0,
+            0,
+            0,
+          );
+          const isOverdue = dueDate < todayInTz;
           return (
             <div className="flex items-center gap-1">
               <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
               <span className={isOverdue ? "text-destructive" : ""}>
-                {date.toLocaleDateString()}
+                {formatDateInTimezone(value as string)}
               </span>
             </div>
           );
@@ -215,13 +238,6 @@ const TasksPageContent = () => {
           },
         ],
       },
-    },
-
-    pagination: {
-      pageSize: 10,
-      pageSizeOptions: [5, 10, 20, 50],
-      showPageSizeSelector: true,
-      showQuickJumper: false,
     },
 
     onRefresh: async () => {
@@ -350,7 +366,25 @@ const TasksPageContent = () => {
         data={tasks ?? []}
         loading={loading}
         error={null}
-        config={config}
+        config={{
+          ...config,
+          pagination: pagination
+            ? {
+                pageSize: pagination.pageSize,
+                pageSizeOptions: [5, 10, 20, 50],
+                showPageSizeSelector: true,
+                showQuickJumper: false,
+                currentPage: pagination.currentPage,
+                totalPages: pagination.totalPages,
+                hasNext: pagination.hasNext,
+                hasPrev: pagination.hasPrev,
+                total: pagination.total,
+                onNextPage: nextPage,
+                onPrevPage: prevPage,
+                onGoToPage: goToPage,
+              }
+            : undefined,
+        }}
         mobileRender={(task) => (
           <TaskListCard
             key={task.id}

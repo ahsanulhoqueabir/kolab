@@ -19,4 +19,5 @@ export const r2 = {
 
 export const app = {
   url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  timezone: "Asia/Dhaka",
 };

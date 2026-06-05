@@ -2,15 +2,17 @@ import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
 import { LogService } from "@/services/log.service";
 import { R2Service } from "@/services/r2.service";
+import { paginated } from "@/lib/pagination";
+import { dbTimestamp } from "@/lib/date.utils";
 import type {
   Project,
   ProjectListItem,
   CreateProjectParams,
   UpdateProjectParams,
 } from "@/types/db/project.types";
+import type { PaginatedData } from "@/types/types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceResult<T = any> =
+type ServiceResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
 
@@ -31,8 +33,7 @@ export class ProjectService {
         ? await R2Service.processAttachments(params.attachment, "projects")
         : [];
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .insert({
           id: crypto.randomUUID(),
@@ -42,8 +43,8 @@ export class ProjectService {
           status: params.status || "DRAFT",
           attachment: processedAttachments,
           created_by: params.created_by,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_at: dbTimestamp(),
+          updated_at: dbTimestamp(),
         })
         .select()
         .single();
@@ -79,7 +80,7 @@ export class ProjectService {
     conditions?: { own?: boolean; all?: boolean };
     page?: number;
     pageSize?: number;
-  }): Promise<ServiceResult<{ projects: ProjectListItem[]; total: number }>> {
+  }): Promise<ServiceResult<PaginatedData<ProjectListItem>>> {
     try {
       const supabase = getSupabaseServerClient();
       const page = filters?.page || 1;
@@ -88,8 +89,7 @@ export class ProjectService {
       const end = start + pageSize - 1;
 
       // Build query with task count via subquery
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query = (supabase as any)
+      const query = supabase
         .from(this.collection)
         .select(
           "id, name, description, deadline, status, created_by (id, name), created_at, updated_at",
@@ -101,24 +101,24 @@ export class ProjectService {
       const hasOwn = filters?.conditions?.own;
 
       if (!hasAll && hasOwn && filters?.profileId) {
-        query = query.eq("created_by", filters.profileId);
+        query.eq("created_by", filters.profileId);
       }
 
       if (filters?.search) {
-        query = query.ilike("name", `%${filters.search}%`);
+        query.ilike("name", `%${filters.search}%`);
       }
 
       if (filters?.status) {
-        query = query.eq("status", filters.status);
+        query.eq("status", filters.status);
       }
 
       if (filters?.deadlineStatus && filters.deadlineStatus !== "all") {
         if (filters.deadlineStatus === "overdue") {
-          query = query
+          query
             .not("deadline", "is", null)
             .lt("deadline", new Date().toISOString().split("T")[0]);
         } else if (filters.deadlineStatus === "upcoming") {
-          query = query
+          query
             .not("deadline", "is", null)
             .gte("deadline", new Date().toISOString().split("T")[0]);
         }
@@ -137,11 +137,10 @@ export class ProjectService {
       }
 
       // Fetch task counts for each project
-      const projects = (data || []) as ProjectListItem[];
+      const projects = (data || []) as unknown as ProjectListItem[];
       const projectsWithCounts = await Promise.all(
         projects.map(async (project) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { count: taskCount } = await (supabase as any)
+          const { count: taskCount } = await supabase
             .from("task")
             .select("id", { count: "exact", head: true })
             .eq("project", project.id);
@@ -150,10 +149,14 @@ export class ProjectService {
         }),
       );
 
-      return success({
-        projects: projectsWithCounts,
-        total: count || 0,
-      });
+      return success(
+        paginated(
+          projectsWithCounts as unknown as ProjectListItem[],
+          count || 0,
+          page,
+          pageSize,
+        ),
+      );
     } catch (err) {
       return error((err as Error).message || "Failed to fetch projects");
     }
@@ -166,8 +169,7 @@ export class ProjectService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .select("*, created_by (id, name), updated_by (id, name)")
         .eq("id", id)
@@ -198,9 +200,8 @@ export class ProjectService {
         ? await R2Service.processAttachments(params.attachment, "projects")
         : undefined;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updateData: Record<string, any> = {
-        updated_at: new Date().toISOString(),
+      const updateData: Record<string, unknown> = {
+        updated_at: dbTimestamp(),
       };
 
       if (params.name !== undefined) updateData.name = params.name;
@@ -213,8 +214,7 @@ export class ProjectService {
       if (params.updated_by !== undefined)
         updateData.updated_by = params.updated_by;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .update(updateData)
         .eq("id", id)
@@ -261,15 +261,13 @@ export class ProjectService {
       const supabase = getSupabaseServerClient();
 
       // Fetch project name before deleting for the log
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: project } = await (supabase as any)
+      const { data: project } = await supabase
         .from(this.collection)
         .select("name")
         .eq("id", id)
         .single();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: sbError } = await (supabase as any)
+      const { error: sbError } = await supabase
         .from(this.collection)
         .delete()
         .eq("id", id);
@@ -307,8 +305,7 @@ export class ProjectService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .select("id, name")
         .eq("id", id)

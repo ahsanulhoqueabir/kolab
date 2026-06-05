@@ -16,7 +16,7 @@ export const GET = withAuth({
     const status = url.searchParams.get("status") || undefined;
     const deadlineStatus = url.searchParams.get("deadlineStatus") || undefined;
     const page = parseInt(url.searchParams.get("page") || "1", 10);
-    const pageSize = parseInt(url.searchParams.get("pageSize") || "50", 10);
+    const pageSize = parseInt(url.searchParams.get("pageSize") || "3", 10);
 
     const result = await ProjectService.list({
       search,

@@ -10,8 +10,7 @@ export type CreateProfileParams = {
   role?: string | null;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceResult<T = any> =
+type ServiceResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
 
@@ -32,8 +31,7 @@ export class ProfileService {
   static async permissions(id: string) {
     try {
       const supabase = getSupabaseServerClient();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: profile, error: sbError } = await (supabase as any)
+      const { data: profile, error: sbError } = await supabase
         .from(this.table)
         .select(this.fields.with_permissions)
         .eq("id", id)
@@ -43,13 +41,20 @@ export class ProfileService {
         return error(sbError?.message || "Profile not found");
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const roleObj = profile.role as any;
+      const p = profile as unknown as {
+        active: boolean;
+        role: {
+          id: string;
+          name: string;
+          permissions: { name: string }[];
+        } | null;
+      };
+      const roleObj = p.role;
       const permissions: string[] =
         roleObj?.permissions?.map((p: { name: string }) => p.name) ?? [];
 
       return success({
-        active: !!profile.active,
+        active: !!p.active,
         roleId: roleObj?.id as string,
         roleName: roleObj?.name as string,
         permissions,
@@ -81,8 +86,7 @@ export class ProfileService {
         }
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.table)
         .insert({
           email: params.email,
@@ -98,7 +102,7 @@ export class ProfileService {
         return error(sbError.message);
       }
 
-      return success(data as Profile);
+      return success(data as unknown as Profile);
     } catch (err) {
       return error((err as Error).message || "An unknown error occurred");
     }
@@ -112,8 +116,7 @@ export class ProfileService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.table)
         .select(this.fields.basic)
         .eq("id", id)
@@ -127,7 +130,7 @@ export class ProfileService {
         return error("Profile not found");
       }
 
-      return success(data as Profile);
+      return success(data as unknown as Profile);
     } catch (err) {
       return error((err as Error).message || "An unknown error occurred");
     }
@@ -143,8 +146,7 @@ export class ProfileService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.table)
         .select(this.fields.with_password)
         .eq("email", email)
@@ -158,7 +160,7 @@ export class ProfileService {
         return error("Profile not found");
       }
 
-      return success(data as Profile);
+      return success(data as unknown as Profile);
     } catch (err) {
       return error((err as Error).message || "An unknown error occurred");
     }

@@ -2,6 +2,7 @@ import * as React from "react";
 import { Clock, Plus, Pencil, Trash2, User } from "lucide-react";
 import { Badge } from "@/components/core/ui/badge";
 import type { LogAction } from "@/types/db/logs.types";
+import { formatDateInTimezone } from "@/lib/date.utils";
 
 interface ActivityLogItemProps {
   log: {
@@ -90,5 +91,5 @@ function getTimeAgo(date: Date): string {
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
+  return formatDateInTimezone(date.toISOString());
 }

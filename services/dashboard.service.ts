@@ -1,8 +1,8 @@
 import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
+import { todayInTimezone, dbTimestamp7DaysAgo } from "@/lib/date.utils";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceResult<T = any> =
+type ServiceResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
 
@@ -69,19 +69,15 @@ export class DashboardService {
       const hasOwn = conditions?.own;
 
       // ── KPIs ──────────────────────────────────────────────
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let projectQuery = (supabase as any).from("project").select("id", {
+      const projectQuery = supabase.from("project").select("id", {
         count: "exact",
         head: true,
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let taskQuery = (supabase as any)
-        .from("task")
-        .select("id, status, due_date");
+      const taskQuery = supabase.from("task").select("id, status, due_date");
 
       if (!hasAll && hasOwn) {
-        projectQuery = projectQuery.eq("created_by", profileId);
-        taskQuery = taskQuery.eq("created_by", profileId);
+        projectQuery.eq("created_by", profileId);
+        taskQuery.eq("created_by", profileId);
       }
 
       const { count: totalProjects } = await projectQuery;
@@ -90,24 +86,22 @@ export class DashboardService {
       const taskList = allTasks || [];
       const totalTasks = taskList.length;
       const completedTasks = taskList.filter(
-        (t: any) => t.status === "COMPLETED",
+        (t: Record<string, unknown>) => t.status === "COMPLETED",
       ).length;
       const pendingTasks = taskList.filter(
-        (t: any) => t.status !== "COMPLETED",
+        (t: Record<string, unknown>) => t.status !== "COMPLETED",
       ).length;
-      const now = new Date().toISOString().split("T")[0];
+      const now = todayInTimezone();
       const overdueTasks = taskList.filter(
-        (t: any) => t.status !== "COMPLETED" && t.due_date && t.due_date < now,
+        (t: Record<string, unknown>) =>
+          t.status !== "COMPLETED" && t.due_date && t.due_date < now,
       ).length;
 
       // ── Task Stats ────────────────────────────────────────
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let statsQuery = (supabase as any)
-        .from("task")
-        .select("priority, status");
+      const statsQuery = supabase.from("task").select("priority, status");
 
       if (!hasAll && hasOwn) {
-        statsQuery = statsQuery.eq("created_by", profileId);
+        statsQuery.eq("created_by", profileId);
       }
 
       const { data: statsData } = await statsQuery;
@@ -124,14 +118,16 @@ export class DashboardService {
         COMPLETED: 0,
       };
 
-      statsList.forEach((t: any) => {
-        if (t.priority && priorityCounts[t.priority] !== undefined) {
-          priorityCounts[t.priority]++;
+      for (const t of statsList as Array<Record<string, unknown>>) {
+        const p = t.priority as string;
+        const s = t.status as string;
+        if (p && priorityCounts[p] !== undefined) {
+          priorityCounts[p]++;
         }
-        if (t.status && statusCounts[t.status] !== undefined) {
-          statusCounts[t.status]++;
+        if (s && statusCounts[s] !== undefined) {
+          statusCounts[s]++;
         }
-      });
+      }
 
       const byPriority = Object.entries(priorityCounts).map(
         ([priority, count]) => ({ priority, count }),
@@ -144,10 +140,14 @@ export class DashboardService {
       // ── Upcoming Deadlines (next 7 days) ──────────────────
       const sevenDaysLater = new Date();
       sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
-      const endDate = sevenDaysLater.toISOString().split("T")[0];
+      const endDate = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Dhaka",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(sevenDaysLater);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let upcomingQuery = (supabase as any)
+      const upcomingQuery = supabase
         .from("task")
         .select("id, title, due_date, priority, project (id, name)")
         .not("due_date", "is", null)
@@ -158,101 +158,97 @@ export class DashboardService {
         .limit(10);
 
       if (!hasAll && hasOwn) {
-        upcomingQuery = upcomingQuery.eq("created_by", profileId);
+        upcomingQuery.eq("created_by", profileId);
       }
 
       const { data: upcomingData } = await upcomingQuery;
       const upcomingDeadlines: UpcomingDeadline[] = (upcomingData || []).map(
-        (t: any) => ({
-          id: t.id,
-          title: t.title,
-          due_date: t.due_date,
-          priority: t.priority,
+        (t: Record<string, unknown>) => ({
+          id: t.id as string,
+          title: t.title as string,
+          due_date: t.due_date as string,
+          priority: t.priority as string,
           project_name:
             typeof t.project === "object" && t.project !== null
-              ? t.project.name
+              ? (t.project as Record<string, string>).name
               : "Unknown",
         }),
       );
 
       // ── High Priority Tasks ──────────────────────────────
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let highPrioQuery = (supabase as any)
+      const highPrioQuery = supabase
         .from("task")
         .select(
           "id, title, status, due_date, priority, project (id, name), assigned_to (id, name)",
         )
         .eq("priority", "HIGH")
         .neq("status", "COMPLETED")
-        .order("due_date", { ascending: true, nullsLast: true })
+        .order("due_date", { ascending: true, nullsFirst: false })
         .limit(10);
 
       if (!hasAll && hasOwn) {
-        highPrioQuery = highPrioQuery.eq("created_by", profileId);
+        highPrioQuery.eq("created_by", profileId);
       }
 
       const { data: highPrioData } = await highPrioQuery;
       const highPriorityTasks: HighPriorityTask[] = (highPrioData || []).map(
-        (t: any) => ({
-          id: t.id,
-          title: t.title,
-          status: t.status,
-          due_date: t.due_date,
+        (t: Record<string, unknown>) => ({
+          id: t.id as string,
+          title: t.title as string,
+          status: t.status as string,
+          due_date: t.due_date as string | null,
           project_name:
             typeof t.project === "object" && t.project !== null
-              ? t.project.name
+              ? (t.project as Record<string, string>).name
               : "Unknown",
           assigned_to_name:
             typeof t.assigned_to === "object" && t.assigned_to !== null
-              ? t.assigned_to.name
+              ? (t.assigned_to as Record<string, string>).name
               : null,
         }),
       );
 
       // ── Project Summaries ────────────────────────────────
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let projSummaryQuery = (supabase as any)
+      const projSummaryQuery = supabase
         .from("project")
         .select("id, name, status, deadline, created_at")
         .order("created_at", { ascending: false })
         .limit(10);
 
       if (!hasAll && hasOwn) {
-        projSummaryQuery = projSummaryQuery.eq("created_by", profileId);
+        projSummaryQuery.eq("created_by", profileId);
       }
 
       const { data: projects } = await projSummaryQuery;
       const projectSummaries: ProjectSummary[] = await Promise.all(
-        (projects || []).map(async (proj: any) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: projTasks } = await (supabase as any)
+        (projects || []).map(async (proj: Record<string, unknown>) => {
+          const { data: projTasks } = await supabase
             .from("task")
             .select("status")
-            .eq("project", proj.id);
+            .eq("project", proj.id as string);
 
           const taskList = projTasks || [];
           const total = taskList.length;
           const completed = taskList.filter(
-            (t: any) => t.status === "COMPLETED",
+            (t: Record<string, unknown>) => t.status === "COMPLETED",
           ).length;
 
           return {
-            id: proj.id,
-            name: proj.name,
-            status: proj.status,
+            id: proj.id as string,
+            name: proj.name as string,
+            status: proj.status as string,
             total_tasks: total,
             completed_tasks: completed,
-            deadline: proj.deadline,
+            deadline: proj.deadline as string | null,
           };
         }),
       );
 
       // ── Recent Activity Count ─────────────────────────────
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { count: recentCount } = await (supabase as any)
+      const { count: recentCount } = await supabase
         .from("logs")
         .select("id", { count: "exact", head: true })
-        .gte("created_at", new Date(Date.now() - 7 * 86400000).toISOString());
+        .gte("created_at", dbTimestamp7DaysAgo());
 
       return success({
         kpis: {

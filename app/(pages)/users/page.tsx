@@ -12,6 +12,7 @@ import { PageAccessGuard } from "@/components/core/PageAccessGuard";
 import { ConfirmationDialog } from "@/components/core/shared/ConfirmationDialog";
 import { UserListCard } from "@/components/hr/users/UserListCard";
 import { useReturnUrl } from "@/hooks/use-return-url";
+import { formatDateInTimezone } from "@/lib/date.utils";
 import type { ListPageConfig } from "@/components/core/shared/list-page";
 import type { UserListItem } from "@/types/db/user.types";
 
@@ -19,10 +20,14 @@ const UsersPageContent = () => {
   const router = useRouter();
   const { withReturnUrl } = useReturnUrl("/users");
 
-  const users = useUserStore((state) => state.users);
+  const users = useUserStore((state) => state.items);
+  const pagination = useUserStore((state) => state.pagination);
   const loading = useUserStore((state) => state.isLoading);
   const fetchUsers = useUserStore((state) => state.fetchUsers);
   const refetchUsers = useUserStore((state) => state.refetchUsers);
+  const goToPage = useUserStore((state) => state.goToPage);
+  const nextPage = useUserStore((state) => state.nextPage);
+  const prevPage = useUserStore((state) => state.prevPage);
   const deleteUser = useUserStore((state) => state.deleteUser);
 
   // Confirmation dialog state
@@ -114,7 +119,7 @@ const UsersPageContent = () => {
         sortable: true,
         render: (value) => {
           if (!value) return "—";
-          return new Date(value as string).toLocaleDateString();
+          return formatDateInTimezone(value as string);
         },
       },
     ],
@@ -157,13 +162,6 @@ const UsersPageContent = () => {
       },
     },
 
-    pagination: {
-      pageSize: 10,
-      pageSizeOptions: [5, 10, 20, 50],
-      showPageSizeSelector: true,
-      showQuickJumper: false,
-    },
-
     onRefresh: async () => {
       try {
         await refetchUsers();
@@ -189,7 +187,25 @@ const UsersPageContent = () => {
         data={users ?? []}
         loading={loading}
         error={null}
-        config={config}
+        config={{
+          ...config,
+          pagination: pagination
+            ? {
+                pageSize: pagination.pageSize,
+                pageSizeOptions: [5, 10, 20, 50],
+                showPageSizeSelector: true,
+                showQuickJumper: false,
+                currentPage: pagination.currentPage,
+                totalPages: pagination.totalPages,
+                hasNext: pagination.hasNext,
+                hasPrev: pagination.hasPrev,
+                total: pagination.total,
+                onNextPage: nextPage,
+                onPrevPage: prevPage,
+                onGoToPage: goToPage,
+              }
+            : undefined,
+        }}
         mobileRender={(user) => (
           <UserListCard
             key={user.id}

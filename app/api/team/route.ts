@@ -13,12 +13,19 @@ export const GET = withAuth({
   try {
     const url = new URL(req.url);
     const projectId = url.searchParams.get("projectId");
+    const search = url.searchParams.get("search") || undefined;
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const pageSize = parseInt(url.searchParams.get("pageSize") || "50", 10);
 
     if (!projectId) {
       return fail({ error: "TEAM_PROJECT_ID_REQUIRED" });
     }
 
-    const result = await TeamService.listByProject(projectId);
+    const result = await TeamService.listByProject(projectId, {
+      search,
+      page,
+      pageSize,
+    });
 
     if (result.success) {
       return ok({ data: result.data });

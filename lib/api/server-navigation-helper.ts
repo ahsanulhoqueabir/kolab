@@ -1,5 +1,6 @@
 import { useAuthStore } from "@/store/auth.store";
 import { AxiosError } from "axios";
+import { dbTimestamp } from "@/lib/date.utils";
 
 /**
  * Server-side navigation utilities for use outside React context
@@ -30,7 +31,7 @@ export class ServerNavigationHelper {
       status,
       message: errorMessage,
       url: isAxiosError(error) ? error.config?.url : undefined,
-      timestamp: new Date().toISOString(),
+      timestamp: dbTimestamp(),
     });
 
     // Handle 403 (Forbidden) differently from 401 (Unauthorized)

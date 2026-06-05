@@ -4,6 +4,7 @@ import { Badge } from "@/components/core/ui/badge";
 import { TaskPriorityBadge } from "@/components/hr/tasks/TaskPriorityBadge";
 import type { UpcomingDeadline } from "@/services/dashboard.service";
 import { TaskPriority } from "@/types/db/task.types";
+import { formatDateInTimezone } from "@/lib/date.utils";
 
 interface UpcomingDeadlinesProps {
   deadlines: UpcomingDeadline[];
@@ -59,7 +60,7 @@ export function UpcomingDeadlines({
                 </div>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 ml-3">
                   <Clock className="h-3 w-3" />
-                  {new Date(task.due_date).toLocaleDateString()}
+                  {formatDateInTimezone(task.due_date)}
                 </div>
               </div>
             ))}

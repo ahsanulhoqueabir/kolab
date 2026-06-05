@@ -1,15 +1,17 @@
 import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
 import { hashPassword } from "@/lib/api/argon2.helper";
+import { paginated } from "@/lib/pagination";
+import { dbTimestamp } from "@/lib/date.utils";
 import type {
   User,
   UserListItem,
   CreateUserParams,
   UpdateUserParams,
 } from "@/types/db/user.types";
+import type { PaginatedData } from "@/types/types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceResult<T = any> =
+type ServiceResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
 
@@ -26,7 +28,7 @@ export class UserService {
     active?: boolean;
     page?: number;
     pageSize?: number;
-  }): Promise<ServiceResult<{ users: UserListItem[]; total: number }>> {
+  }): Promise<ServiceResult<PaginatedData<UserListItem>>> {
     try {
       const supabase = getSupabaseServerClient();
       const page = filters?.page || 1;
@@ -34,8 +36,7 @@ export class UserService {
       const start = (page - 1) * pageSize;
       const end = start + pageSize - 1;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query = (supabase as any)
+      const query = supabase
         .from(this.collection)
         .select(
           "id, name, email, image, active, role (id, name), created_at, updated_at",
@@ -44,15 +45,15 @@ export class UserService {
 
       if (filters?.search) {
         const s = filters.search;
-        query = query.or(`name.ilike.%${s}%,email.ilike.%${s}%`);
+        query.or(`name.ilike.%${s}%,email.ilike.%${s}%`);
       }
 
       if (filters?.role) {
-        query = query.eq("role", filters.role);
+        query.eq("role", filters.role);
       }
 
       if (filters?.active !== undefined) {
-        query = query.eq("active", filters.active);
+        query.eq("active", filters.active);
       }
 
       const {
@@ -67,10 +68,14 @@ export class UserService {
         return error(sbError.message);
       }
 
-      return success({
-        users: (data || []) as UserListItem[],
-        total: count || 0,
-      });
+      return success(
+        paginated(
+          (data || []) as unknown as UserListItem[],
+          count || 0,
+          page,
+          pageSize,
+        ),
+      );
     } catch (err) {
       return error((err as Error).message || "Failed to fetch users");
     }
@@ -84,7 +89,7 @@ export class UserService {
       const supabase = getSupabaseServerClient();
       const hashedPassword = await hashPassword(params.password);
 
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .insert({
           id: crypto.randomUUID(),
@@ -115,8 +120,7 @@ export class UserService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .select("*, role (id, name)")
         .eq("id", id)
@@ -141,8 +145,7 @@ export class UserService {
   ): Promise<ServiceResult<User>> {
     try {
       const supabase = getSupabaseServerClient();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updateData: Record<string, any> = {};
+      const updateData: Record<string, unknown> = {};
 
       if (params.name !== undefined) updateData.name = params.name;
       if (params.email !== undefined) updateData.email = params.email;
@@ -154,10 +157,9 @@ export class UserService {
         updateData.password = await hashPassword(params.password);
       }
 
-      updateData.updated_at = new Date().toISOString();
+      updateData.updated_at = dbTimestamp();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .update(updateData)
         .eq("id", id)
@@ -181,8 +183,7 @@ export class UserService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: sbError } = await (supabase as any)
+      const { error: sbError } = await supabase
         .from(this.collection)
         .delete()
         .eq("id", id);
@@ -206,8 +207,7 @@ export class UserService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .select("id, name")
         .eq("id", id)
@@ -235,8 +235,7 @@ export class UserService {
       const supabase = getSupabaseServerClient();
 
       // Check if user has created projects
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: projects, error: projError } = await (supabase as any)
+      const { data: projects, error: projError } = await supabase
         .from("project")
         .select("id")
         .eq("created_by", id)
@@ -256,8 +255,7 @@ export class UserService {
       }
 
       // Check if user has assigned tasks
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: tasks, error: taskError } = await (supabase as any)
+      const { data: tasks, error: taskError } = await supabase
         .from("task")
         .select("id")
         .eq("assigned_to", id)

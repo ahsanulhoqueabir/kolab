@@ -35,10 +35,14 @@ const RolesPageContent = () => {
   const router = useRouter();
   const { withReturnUrl } = useReturnUrl("/role-management");
 
-  const roles = useRoleStore((state) => state.roles);
+  const roles = useRoleStore((state) => state.items);
+  const pagination = useRoleStore((state) => state.pagination);
   const loadingRoles = useRoleStore((state) => state.isLoading);
   const fetchRoles = useRoleStore((state) => state.fetchRoles);
   const refetchRoles = useRoleStore((state) => state.refetchRoles);
+  const goToPage = useRoleStore((state) => state.goToPage);
+  const nextPage = useRoleStore((state) => state.nextPage);
+  const prevPage = useRoleStore((state) => state.prevPage);
   const deleteRole = useRoleStore((state) => state.deleteRole);
   const checkDeleteStatus = useRoleStore((state) => state.checkDeleteStatus);
   const bulkDeleteRoles = useRoleStore((state) => state.bulkDeleteRoles);
@@ -183,13 +187,6 @@ const RolesPageContent = () => {
       },
     },
 
-    pagination: {
-      pageSize: 10,
-      pageSizeOptions: [5, 10, 20, 50],
-      showPageSizeSelector: true,
-      showQuickJumper: false,
-    },
-
     onRefresh: async () => {
       try {
         await refetchRoles();
@@ -237,7 +234,25 @@ const RolesPageContent = () => {
         data={roles ?? []}
         loading={loadingRoles}
         error={null}
-        config={config}
+        config={{
+          ...config,
+          pagination: pagination
+            ? {
+                pageSize: pagination.pageSize,
+                pageSizeOptions: [5, 10, 20, 50],
+                showPageSizeSelector: true,
+                showQuickJumper: false,
+                currentPage: pagination.currentPage,
+                totalPages: pagination.totalPages,
+                hasNext: pagination.hasNext,
+                hasPrev: pagination.hasPrev,
+                total: pagination.total,
+                onNextPage: nextPage,
+                onPrevPage: prevPage,
+                onGoToPage: goToPage,
+              }
+            : undefined,
+        }}
         mobileRender={(role) => (
           <RoleListCard
             key={role.id}

@@ -4,9 +4,14 @@ import { mergeRequestPayload } from "@/lib/api/request-payload";
 import type { Role } from "@/types/db/role.types";
 import { ok, fail } from "@/lib/api/api-response";
 
-export const GET = withAuth()(async ({ req, user }) => {
+export const GET = withAuth()(async ({ req }) => {
   try {
-    const result = await RoleService.list();
+    const url = new URL(req.url);
+    const search = url.searchParams.get("search") || undefined;
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const pageSize = parseInt(url.searchParams.get("pageSize") || "50", 10);
+
+    const result = await RoleService.list({ search, page, pageSize });
     if (result.success) {
       return ok({ data: result.data });
     }

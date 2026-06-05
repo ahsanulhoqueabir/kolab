@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader } from "@/components/core/ui/card";
 import { Skeleton } from "@/components/core/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { formatDateInTimezone } from "@/lib/date.utils";
 import { useTaskStore } from "@/store/task.store";
 import { TaskStatusBadge } from "@/components/hr/tasks/TaskStatusBadge";
 import { TaskPriorityBadge } from "@/components/hr/tasks/TaskPriorityBadge";
@@ -220,7 +221,7 @@ function TaskDetailsPageContent() {
               <div className="flex items-center gap-1 text-sm">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 {task.due_date
-                  ? new Date(task.due_date).toLocaleDateString()
+                  ? formatDateInTimezone(task.due_date)
                   : "No due date"}
               </div>
             </div>
@@ -230,9 +231,7 @@ function TaskDetailsPageContent() {
                 Created
               </h3>
               <p className="text-sm">
-                {task.created_at
-                  ? new Date(task.created_at).toLocaleDateString()
-                  : "—"}
+                {task.created_at ? formatDateInTimezone(task.created_at) : "—"}
               </p>
             </div>
           </div>

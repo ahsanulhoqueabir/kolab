@@ -12,6 +12,7 @@ import { PageAccessGuard } from "@/components/core/PageAccessGuard";
 import { ConfirmationDialog } from "@/components/core/shared/ConfirmationDialog";
 import { ProjectListCard } from "@/components/hr/projects/ProjectListCard";
 import { useReturnUrl } from "@/hooks/use-return-url";
+import { formatDateInTimezone } from "@/lib/date.utils";
 import type { ListPageConfig } from "@/components/core/shared/list-page";
 import type { ProjectListItem, ProjectStatus } from "@/types/db/project.types";
 
@@ -36,10 +37,14 @@ const ProjectsPageContent = () => {
   const router = useRouter();
   const { withReturnUrl } = useReturnUrl("/projects");
 
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore((state) => state.items);
+  const pagination = useProjectStore((state) => state.pagination);
   const loading = useProjectStore((state) => state.isLoading);
   const fetchProjects = useProjectStore((state) => state.fetchProjects);
   const refetchProjects = useProjectStore((state) => state.refetchProjects);
+  const goToPage = useProjectStore((state) => state.goToPage);
+  const nextPage = useProjectStore((state) => state.nextPage);
+  const prevPage = useProjectStore((state) => state.prevPage);
   const deleteProject = useProjectStore((state) => state.deleteProject);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -108,13 +113,31 @@ const ProjectsPageContent = () => {
         sortable: true,
         render: (value) => {
           if (!value) return <span className="text-muted-foreground">—</span>;
-          const date = new Date(value as string);
-          const isOverdue = date < new Date();
+          const dueDate = new Date(value as string);
+          const tz = "Asia/Dhaka";
+          const todayParts = new Intl.DateTimeFormat("en-CA", {
+            timeZone: tz,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).formatToParts(new Date());
+          const get = (type: string) =>
+            parseInt(todayParts.find((p) => p.type === type)?.value || "0", 10);
+          const todayInTz = new Date(
+            get("year"),
+            get("month") - 1,
+            get("day"),
+            0,
+            0,
+            0,
+            0,
+          );
+          const isOverdue = dueDate < todayInTz;
           return (
             <div className="flex items-center gap-1">
               <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
               <span className={isOverdue ? "text-destructive" : ""}>
-                {date.toLocaleDateString()}
+                {formatDateInTimezone(value as string)}
               </span>
             </div>
           );
@@ -210,13 +233,6 @@ const ProjectsPageContent = () => {
       },
     },
 
-    pagination: {
-      pageSize: 10,
-      pageSizeOptions: [5, 10, 20, 50],
-      showPageSizeSelector: true,
-      showQuickJumper: false,
-    },
-
     onRefresh: async () => {
       try {
         await refetchProjects();
@@ -246,7 +262,25 @@ const ProjectsPageContent = () => {
         data={projects ?? []}
         loading={loading}
         error={null}
-        config={config}
+        config={{
+          ...config,
+          pagination: pagination
+            ? {
+                pageSize: pagination.pageSize,
+                pageSizeOptions: [5, 10, 20, 50],
+                showPageSizeSelector: true,
+                showQuickJumper: false,
+                currentPage: pagination.currentPage,
+                totalPages: pagination.totalPages,
+                hasNext: pagination.hasNext,
+                hasPrev: pagination.hasPrev,
+                total: pagination.total,
+                onNextPage: nextPage,
+                onPrevPage: prevPage,
+                onGoToPage: goToPage,
+              }
+            : undefined,
+        }}
         mobileRender={(project) => (
           <ProjectListCard
             key={project.id}

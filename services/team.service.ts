@@ -1,15 +1,17 @@
 import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
 import { LogService } from "@/services/log.service";
+import { paginated } from "@/lib/pagination";
+import { dbTimestamp, todayInTimezone } from "@/lib/date.utils";
 import type {
   Team,
   TeamMember,
   AddMemberParams,
   WorkloadItem,
 } from "@/types/db/team.types";
+import type { PaginatedData } from "@/types/types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceResult<T = any> =
+type ServiceResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
 
@@ -26,8 +28,7 @@ export class TeamService {
       const supabase = getSupabaseServerClient();
 
       // Check if member already exists in this project
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: existing } = await (supabase as any)
+      const { data: existing } = await supabase
         .from(this.collection)
         .select("id")
         .eq("project", params.project)
@@ -39,29 +40,27 @@ export class TeamService {
       }
 
       // Fetch member and project names for the log
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: profileData } = await (supabase as any)
+      const { data: profileData } = await supabase
         .from("profile")
         .select("name")
         .eq("id", params.profile)
         .single();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: projectData } = await (supabase as any)
+      const { data: projectData } = await supabase
         .from("project")
         .select("name")
         .eq("id", params.project)
         .single();
 
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .insert({
           id: crypto.randomUUID(),
           project: params.project,
           profile: params.profile,
           role: params.role || "MEMBER",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_at: dbTimestamp(),
+          updated_at: dbTimestamp(),
         })
         .select()
         .single();
@@ -103,22 +102,19 @@ export class TeamService {
       const supabase = getSupabaseServerClient();
 
       // Fetch names before removing for the log
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: profileData } = await (supabase as any)
+      const { data: profileData } = await supabase
         .from("profile")
         .select("name")
         .eq("id", profileId)
         .single();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: projectData } = await (supabase as any)
+      const { data: projectData } = await supabase
         .from("project")
         .select("name")
         .eq("id", projectId)
         .single();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: sbError } = await (supabase as any)
+      const { error: sbError } = await supabase
         .from(this.collection)
         .delete()
         .eq("project", projectId)
@@ -154,24 +150,53 @@ export class TeamService {
    */
   static async listByProject(
     projectId: string,
-  ): Promise<ServiceResult<TeamMember[]>> {
+    filters?: {
+      search?: string;
+      page?: number;
+      pageSize?: number;
+    },
+  ): Promise<ServiceResult<PaginatedData<TeamMember>>> {
     try {
       const supabase = getSupabaseServerClient();
+      const page = filters?.page || 1;
+      const pageSize = filters?.pageSize || 50;
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize - 1;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const query = supabase
         .from(this.collection)
         .select(
           "id, project (id, name), profile (id, name, email, image), role, created_at",
+          { count: "exact" },
         )
-        .eq("project", projectId)
-        .order("created_at", { ascending: true });
+        .eq("project", projectId);
+
+      if (filters?.search) {
+        query.or(
+          `profile.name.ilike.%${filters.search}%,profile.email.ilike.%${filters.search}%`,
+        );
+      }
+
+      const {
+        data,
+        error: sbError,
+        count,
+      } = await query
+        .order("created_at", { ascending: true })
+        .range(start, end);
 
       if (sbError) {
         return error(sbError.message);
       }
 
-      return success((data || []) as TeamMember[]);
+      return success(
+        paginated(
+          (data || []) as unknown as TeamMember[],
+          count || 0,
+          page,
+          pageSize,
+        ),
+      );
     } catch (err) {
       return error((err as Error).message || "Failed to fetch team members");
     }
@@ -186,8 +211,7 @@ export class TeamService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
+      const { data, error: sbError } = await supabase
         .from(this.collection)
         .select(
           "id, project (id, name), profile (id, name, email, image), role, created_at",
@@ -199,7 +223,7 @@ export class TeamService {
         return error(sbError.message);
       }
 
-      return success((data || []) as TeamMember[]);
+      return success((data || []) as unknown as TeamMember[]);
     } catch (err) {
       return error((err as Error).message || "Failed to fetch member projects");
     }
@@ -216,13 +240,12 @@ export class TeamService {
       const supabase = getSupabaseServerClient();
 
       // Get all team members (optionally filtered by project)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let membersQuery = (supabase as any)
+      const membersQuery = supabase
         .from(this.collection)
         .select("id, profile (id, name), project");
 
       if (projectId) {
-        membersQuery = membersQuery.eq("project", projectId);
+        membersQuery.eq("project", projectId);
       }
 
       const { data: members, error: membersError } = await membersQuery;
@@ -237,25 +260,24 @@ export class TeamService {
 
       // For each member, count their tasks
       const workloadItems: WorkloadItem[] = await Promise.all(
-        members.map(async (member: any) => {
+        members.map(async (member: Record<string, unknown>) => {
           const profileId =
             typeof member.profile === "object" && member.profile !== null
-              ? member.profile.id
-              : member.profile;
+              ? (member.profile as Record<string, string>).id
+              : (member.profile as string);
           const profileName =
             typeof member.profile === "object" && member.profile !== null
-              ? member.profile.name
+              ? (member.profile as Record<string, string>).name
               : "Unknown";
 
           // Build task query for this member
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          let taskQuery = (supabase as any)
+          const taskQuery = supabase
             .from("task")
             .select("id, status, due_date", { count: "exact" })
             .eq("assigned_to", profileId);
 
           if (projectId) {
-            taskQuery = taskQuery.eq("project", projectId);
+            taskQuery.eq("project", projectId);
           }
 
           const { data: tasks } = await taskQuery;
@@ -263,14 +285,14 @@ export class TeamService {
           const taskList = tasks || [];
           const totalTasks = taskList.length;
           const completedTasks = taskList.filter(
-            (t: any) => t.status === "COMPLETED",
+            (t: Record<string, unknown>) => t.status === "COMPLETED",
           ).length;
           const pendingTasks = taskList.filter(
-            (t: any) => t.status !== "COMPLETED",
+            (t: Record<string, unknown>) => t.status !== "COMPLETED",
           ).length;
-          const now = new Date().toISOString().split("T")[0];
+          const now = todayInTimezone();
           const overdueTasks = taskList.filter(
-            (t: any) =>
+            (t: Record<string, unknown>) =>
               t.status !== "COMPLETED" && t.due_date && t.due_date < now,
           ).length;
 

@@ -14,8 +14,8 @@ import { CreateTaskParams } from "@/types/db/task.types";
 function CreateTaskPageContent() {
   const router = useRouter();
   const { createTask } = useTaskStore();
-  const { projects, fetchProjects } = useProjectStore();
-  const { users, fetchUsers } = useUserStore();
+  const { items: projects, fetchProjects } = useProjectStore();
+  const { items: users, fetchUsers } = useUserStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {

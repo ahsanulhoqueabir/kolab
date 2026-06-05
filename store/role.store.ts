@@ -1,5 +1,7 @@
-import { create } from "zustand";
 import { api_client } from "@/lib/api/api-client";
+import { hashFilters, dedupeById } from "@/lib/pagination";
+import type { PaginationMeta, PaginatedData, CachedPage } from "@/types/types";
+import { create } from "zustand";
 
 export interface RoleRes {
   id: string;
@@ -12,14 +14,25 @@ export interface RoleRes {
 }
 
 interface RoleState {
-  roles: RoleRes[];
+  items: RoleRes[];
+  pagination: PaginationMeta | null;
   isLoading: boolean;
   error: string | null;
+  pageCache: Map<string, CachedPage<RoleRes>>;
+  fullyLoadedFilters: Set<string>;
+  currentFilterHash: string;
 }
 
 interface RoleActions {
-  fetchRoles: () => Promise<void>;
+  fetchRoles: (filters?: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }) => Promise<void>;
   refetchRoles: () => Promise<void>;
+  goToPage: (page: number, pageSize?: number) => Promise<void>;
+  nextPage: () => Promise<void>;
+  prevPage: () => Promise<void>;
   getRoleById: (
     id: string,
   ) => Promise<{ success: boolean; data?: RoleRes; message?: string }>;
@@ -47,6 +60,7 @@ interface RoleActions {
   bulkDeleteRoles: (
     ids: string[],
   ) => Promise<{ success: boolean; deletedCount: number; failedCount: number }>;
+  clearCache: () => void;
 }
 
 type RoleStore = RoleState & RoleActions;
@@ -135,18 +149,102 @@ function saveLocalRoles(roles: RoleRes[]) {
 }
 
 export const useRoleStore = create<RoleStore>((set, get) => ({
-  roles: [],
+  items: [],
+  pagination: null,
   isLoading: false,
   error: null,
+  pageCache: new Map(),
+  fullyLoadedFilters: new Set(),
+  currentFilterHash: "",
 
-  fetchRoles: async () => {
-    set({ isLoading: true, error: null });
+  fetchRoles: async (filters = {}) => {
+    const page = filters.page || 1;
+    const pageSize = filters.pageSize || 10;
+    const filterHash = hashFilters(filters as Record<string, unknown>);
+    const cacheKey = `${filterHash}|p${page}|s${pageSize}`;
+    const state = get();
+
+    const cached = state.pageCache.get(cacheKey);
+    if (cached) {
+      set({
+        items: cached.items,
+        pagination: { ...cached.pagination, currentPage: page },
+        currentFilterHash: filterHash,
+        isLoading: false,
+        error: null,
+      });
+      return;
+    }
+
+    set({ isLoading: true, error: null, currentFilterHash: filterHash });
+
     try {
-      // Try hitting the actual API
-      const res = await api_client.get("/roles");
-      set({ roles: res.data?.data || [], isLoading: false });
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== "") {
+          params.set(key, String(val));
+        }
+      });
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
+
+      const query = params.toString();
+      const res = await api_client.get(`/roles?${query}`);
+      const responseData = res.data?.data as PaginatedData<RoleRes> | undefined;
+
+      if (!responseData) {
+        set({ isLoading: false, error: "Invalid response" });
+        return;
+      }
+
+      const { items: newItems, pagination: paginationMeta } = responseData;
+
+      const newPageCache = new Map(state.pageCache);
+      newPageCache.set(cacheKey, {
+        items: newItems,
+        pagination: paginationMeta,
+        fetchedAt: Date.now(),
+      });
+
+      const allItems: RoleRes[] = [];
+      Array.from(newPageCache.entries())
+        .filter(([k]) => k.startsWith(`${filterHash}|`))
+        .sort(([a], [b]) => {
+          const ap = parseInt(a.split("|p")[1]?.split("|")[0] || "0", 10);
+          const bp = parseInt(b.split("|p")[1]?.split("|")[0] || "0", 10);
+          return ap - bp;
+        })
+        .forEach(([, cp]) => allItems.push(...cp.items));
+
+      const dedupedItems = dedupeById(allItems);
+
+      const loadedPages = new Set(
+        Array.from(newPageCache.keys())
+          .filter((k) => k.startsWith(`${filterHash}|`))
+          .map((k) => parseInt(k.split("|p")[1]?.split("|")[0] || "0", 10)),
+      );
+      const newFullyLoaded = new Set(state.fullyLoadedFilters);
+      let allLoaded = true;
+      for (let i = 1; i <= paginationMeta.totalPages; i++) {
+        if (!loadedPages.has(i)) {
+          allLoaded = false;
+          break;
+        }
+      }
+      if (allLoaded) newFullyLoaded.add(filterHash);
+      else newFullyLoaded.delete(filterHash);
+
+      set({
+        items: dedupedItems,
+        pagination: paginationMeta,
+        isLoading: false,
+        error: null,
+        pageCache: newPageCache,
+        fullyLoadedFilters: newFullyLoaded,
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      if (err.response) {
+      if (err?.response) {
         set({
           error: err.response.data?.error || "Failed to fetch roles",
           isLoading: false,
@@ -154,19 +252,118 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
       } else {
         // Fallback to localStorage mock database
         const localRoles = getLocalRoles();
-        set({ roles: localRoles, isLoading: false });
+        const total = localRoles.length;
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        const start = (page - 1) * pageSize;
+        const paged = localRoles.slice(start, start + pageSize);
+        const paginationMeta: PaginationMeta = {
+          currentPage: page,
+          pageSize,
+          totalPages,
+          total,
+          hasNext: page < totalPages,
+          hasPrev: page > 1,
+        };
+
+        const newPageCache = new Map(state.pageCache);
+        newPageCache.set(cacheKey, {
+          items: paged,
+          pagination: paginationMeta,
+          fetchedAt: Date.now(),
+        });
+
+        const allItems: RoleRes[] = [];
+        Array.from(newPageCache.entries())
+          .filter(([k]) => k.startsWith(`${filterHash}|`))
+          .sort(([a], [b]) => {
+            const ap = parseInt(a.split("|p")[1]?.split("|")[0] || "0", 10);
+            const bp = parseInt(b.split("|p")[1]?.split("|")[0] || "0", 10);
+            return ap - bp;
+          })
+          .forEach(([, cp]) => allItems.push(...cp.items));
+
+        const dedupedItems = dedupeById(allItems);
+
+        const newFullyLoaded = new Set(state.fullyLoadedFilters);
+        let allLoaded = true;
+        for (let i = 1; i <= paginationMeta.totalPages; i++) {
+          const ck = `${filterHash}|p${i}|s${pageSize}`;
+          if (!newPageCache.has(ck)) {
+            allLoaded = false;
+            break;
+          }
+        }
+        if (allLoaded) newFullyLoaded.add(filterHash);
+
+        set({
+          items: dedupedItems,
+          pagination: paginationMeta,
+          isLoading: false,
+          error: null,
+          pageCache: newPageCache,
+          fullyLoadedFilters: newFullyLoaded,
+        });
       }
     }
   },
 
   refetchRoles: async () => {
-    await get().fetchRoles();
+    const state = get();
+    const page = state.pagination?.currentPage || 1;
+    const pageSize = state.pagination?.pageSize || 10;
+    const filterHash = state.currentFilterHash;
+
+    const newPageCache = new Map(state.pageCache);
+    Array.from(newPageCache.keys())
+      .filter((k) => k.startsWith(`${filterHash}|`))
+      .forEach((k) => newPageCache.delete(k));
+    const newFullyLoaded = new Set(state.fullyLoadedFilters);
+    newFullyLoaded.delete(filterHash);
+
+    set({ pageCache: newPageCache, fullyLoadedFilters: newFullyLoaded });
+
+    let filters: Record<string, unknown> = {};
+    try {
+      filters = JSON.parse(filterHash || "{}");
+    } catch {
+      filters = {};
+    }
+    await get().fetchRoles({ ...filters, page, pageSize });
+  },
+
+  goToPage: async (page, pageSize) => {
+    const state = get();
+    let filters: Record<string, unknown> = {};
+    try {
+      filters = JSON.parse(state.currentFilterHash || "{}");
+    } catch {
+      filters = {};
+    }
+    await get().fetchRoles({
+      ...filters,
+      page,
+      pageSize: pageSize || state.pagination?.pageSize || 10,
+    });
+  },
+
+  nextPage: async () => {
+    const state = get();
+    const next = (state.pagination?.currentPage || 1) + 1;
+    if (state.pagination && next > state.pagination.totalPages) return;
+    await get().goToPage(next);
+  },
+
+  prevPage: async () => {
+    const state = get();
+    const prev = (state.pagination?.currentPage || 1) - 1;
+    if (prev < 1) return;
+    await get().goToPage(prev);
   },
 
   getRoleById: async (id: string) => {
     try {
       const res = await api_client.get(`/roles/${id}`);
-      return { success: true, data: res.data?.data };
+      return { success: true, data: res.data?.data }; // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.response) {
         return {
@@ -187,6 +384,7 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
     try {
       const res = await api_client.post("/roles", roleData);
       return { success: true, data: res.data?.data };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.response) {
         return {
@@ -203,7 +401,7 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
       };
       const updated = [...localRoles, newRole];
       saveLocalRoles(updated);
-      set({ roles: updated });
+      set({ items: updated });
       return { success: true, data: newRole };
     }
   },
@@ -212,6 +410,7 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
     try {
       const res = await api_client.put(`/roles/${roleData.id}`, roleData);
       return { success: true, data: res.data?.data };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.response) {
         return {
@@ -226,16 +425,14 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
           : r,
       );
       saveLocalRoles(updated);
-      set({ roles: updated });
+      set({ items: updated });
       return { success: true, data: roleData };
     }
   },
 
   deleteRole: async (id: string) => {
     try {
-      // Mocking check for in-use
       if (id === "1" || id === "2") {
-        // Admin and Project Manager roles cannot be deleted because they are assigned to profiles
         return {
           success: false,
           hasProfiles: true,
@@ -247,8 +444,9 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
         };
       }
       await api_client.delete(`/roles/${id}`);
-      set({ roles: get().roles.filter((r) => r.id !== id) });
+      set({ items: get().items.filter((r) => r.id !== id) });
       return { success: true };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.response) {
         const errorData = err.response.data || {};
@@ -273,7 +471,7 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
       const localRoles = getLocalRoles();
       const updated = localRoles.filter((r) => r.id !== id);
       saveLocalRoles(updated);
-      set({ roles: updated });
+      set({ items: updated });
       return { success: true };
     }
   },
@@ -313,11 +511,12 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
         }
       }
       set({
-        roles: get().roles.filter(
+        items: get().items.filter(
           (r) => !ids.includes(r.id) || r.id === "1" || r.id === "2",
         ),
       });
       return { success: true, deletedCount: deleted, failedCount: failed };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.response) {
         return {
@@ -341,8 +540,18 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
         return true;
       });
       saveLocalRoles(updated);
-      set({ roles: updated });
+      set({ items: updated });
       return { success: true, deletedCount: deleted, failedCount: failed };
     }
+  },
+
+  clearCache: () => {
+    set({
+      items: [],
+      pagination: null,
+      pageCache: new Map(),
+      fullyLoadedFilters: new Set(),
+      currentFilterHash: "",
+    });
   },
 }));
