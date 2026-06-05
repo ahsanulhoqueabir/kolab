@@ -76,11 +76,16 @@ export function SearchComboBox({
 
   const handleSelect = useCallback(
     (optionValue: string) => {
-      onValueChange(optionValue);
+      // If the same option is clicked again, deselect it
+      if (optionValue === value) {
+        onValueChange("");
+      } else {
+        onValueChange(optionValue);
+      }
       setOpen(false);
       setSearch("");
     },
-    [onValueChange],
+    [onValueChange, value],
   );
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -137,7 +142,6 @@ export function SearchComboBox({
             {showCreate && onCreateNew && (
               <Button
                 type="button"
-                variant="outline"
                 size="icon-sm"
                 onClick={() => {
                   onCreateNew();
@@ -152,7 +156,7 @@ export function SearchComboBox({
           </div>
 
           {/* Options */}
-          <div className="max-h-60 overflow-auto">
+          <div className="max-h-60 overflow-auto mt-2 space-y-1">
             {filteredOptions.length === 0 ? (
               <div className="py-4 text-center text-sm text-muted-foreground">
                 {emptyMessage}
@@ -164,17 +168,18 @@ export function SearchComboBox({
                   type="button"
                   onClick={() => handleSelect(option.value)}
                   className={cn(
-                    "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                    "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-left outline-none",
                     "hover:bg-accent hover:text-accent-foreground",
                     "data-disabled:pointer-events-none data-disabled:opacity-50",
+                    "bg-accent/10",
                     option.value === value &&
                       "bg-accent text-accent-foreground",
                   )}
                 >
-                  <span className="flex-1 truncate">{option.label}</span>
                   {option.value === value && (
-                    <Check className="ml-2 h-4 w-4 shrink-0" />
+                    <Check className=" h-4 w-4 shrink-0" />
                   )}
+                  <span className="ml-2 flex-1 truncate">{option.label}</span>
                 </button>
               ))
             )}
