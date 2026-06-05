@@ -12,13 +12,6 @@ import { PageAccessGuard } from "@/components/core/PageAccessGuard";
 import { ConfirmationDialog } from "@/components/core/shared/ConfirmationDialog";
 import { ProjectListCard } from "@/components/hr/projects/ProjectListCard";
 import { useReturnUrl } from "@/hooks/use-return-url";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/core/ui/select";
 import type { ListPageConfig } from "@/components/core/shared/list-page";
 import type { ProjectListItem, ProjectStatus } from "@/types/db/project.types";
 
@@ -53,21 +46,9 @@ const ProjectsPageContent = () => {
   const [pendingDeleteName, setPendingDeleteName] = useState<string>("");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
-  // Filter state
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [deadlineFilter, setDeadlineFilter] = useState<string>("");
-
   useEffect(() => {
     fetchProjects();
   }, [fetchProjects]);
-
-  // Apply filters whenever they change
-  useEffect(() => {
-    fetchProjects({
-      status: statusFilter || undefined,
-      deadlineStatus: deadlineFilter || undefined,
-    });
-  }, [statusFilter, deadlineFilter, fetchProjects]);
 
   const handleConfirmedDelete = async () => {
     if (pendingDeleteId === null) return;
@@ -168,8 +149,38 @@ const ProjectsPageContent = () => {
       placeholder: "Search projects...",
     },
 
+    filters: [
+      {
+        key: "status",
+        label: "Status",
+        placeholder: "All Statuses",
+        options: [
+          { label: "Draft", value: "DRAFT" },
+          { label: "Active", value: "ACTIVE" },
+          { label: "On Hold", value: "ON_HOLD" },
+          { label: "Completed", value: "COMPLETED" },
+        ],
+      },
+      {
+        key: "deadline",
+        label: "Deadline",
+        placeholder: "All Deadlines",
+        options: [
+          { label: "Overdue", value: "overdue" },
+          { label: "Upcoming", value: "upcoming" },
+        ],
+      },
+    ],
+
+    onFilterChange: (filters) => {
+      fetchProjects({
+        status: filters.status || undefined,
+        deadlineStatus: filters.deadline || undefined,
+      });
+    },
+
     actions: {
-      default: ["edit", "delete"],
+      default: ["view", "edit", "delete"],
       pageActions: [
         {
           label: "Create Project",
@@ -215,6 +226,10 @@ const ProjectsPageContent = () => {
       }
     },
 
+    onView: (project) => {
+      router.push(withReturnUrl(`/projects/${project.id}`));
+    },
+
     onEdit: (project) => {
       router.push(withReturnUrl(`/projects/${project.id}/edit`));
     },
@@ -227,43 +242,6 @@ const ProjectsPageContent = () => {
 
   return (
     <div className="">
-      {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="w-48">
-          <Select
-            value={statusFilter || "all"}
-            onValueChange={(value) => setStatusFilter(value === "all" ? "" : value)}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="DRAFT">Draft</SelectItem>
-              <SelectItem value="ACTIVE">Active</SelectItem>
-              <SelectItem value="ON_HOLD">On Hold</SelectItem>
-              <SelectItem value="COMPLETED">Completed</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="w-48">
-          <Select
-            value={deadlineFilter || "all"}
-            onValueChange={(value) => setDeadlineFilter(value === "all" ? "" : value)}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="All Deadlines" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Deadlines</SelectItem>
-              <SelectItem value="overdue">Overdue</SelectItem>
-              <SelectItem value="upcoming">Upcoming</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
       <ListPage
         data={projects ?? []}
         loading={loading}

@@ -37,6 +37,7 @@ function EditProjectPageContent() {
             description: project.description || "",
             deadline: project.deadline ? project.deadline.split("T")[0] : "",
             status: project.status || "DRAFT",
+            attachment: project.attachment || [],
           });
         } else {
           toast.error(result.message || "Failed to load project");
@@ -61,6 +62,7 @@ function EditProjectPageContent() {
         description: data.description,
         deadline: data.deadline,
         status: data.status,
+        attachment: data.attachment,
       });
 
       if (result.success) {

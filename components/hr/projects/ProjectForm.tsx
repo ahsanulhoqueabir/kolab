@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { Card, CardContent } from "@/components/core/ui/card";
@@ -13,8 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/core/ui/select";
+import { DatePicker } from "@/components/core/ui/date-picker";
+import { FileUpload } from "@/components/core/shared/FileUpload";
 import { CreatePageHeader } from "@/components/core/shared/CreatePageHeader";
 import { useReturnUrl } from "@/hooks/use-return-url";
+import { useUploadStore } from "@/store/upload.store";
 import {
   PROJECT_DEFAULT_VALUES,
   PROJECT_STATUS_OPTIONS,
@@ -43,6 +46,8 @@ export function ProjectForm({
   const router = useRouter();
   const { returnTo } = useReturnUrl("/projects");
   const isEdit = mode === "edit";
+  const queuedFiles = useUploadStore((s) => s.queuedFiles);
+  const clearUploadFiles = useUploadStore((s) => s.clearFiles);
 
   const {
     register,
@@ -56,7 +61,26 @@ export function ProjectForm({
 
   const formName = useWatch({ control, name: "name" });
   const selectedStatus = useWatch({ control, name: "status" });
+  const deadlineValue = useWatch({ control, name: "deadline" });
+  const attachmentValue = useWatch({ control, name: "attachment" });
   const canSubmit = !!formName;
+
+  // Convert string date ↔ Date for the DatePicker
+  const deadlineDate = useMemo(() => {
+    if (!deadlineValue) return undefined;
+    const d = new Date(deadlineValue);
+    return isNaN(d.getTime()) ? undefined : d;
+  }, [deadlineValue]);
+
+  const handleDeadlineChange = (date: Date | undefined) => {
+    setValue("deadline", date ? date.toISOString().split("T")[0] : "", {
+      shouldDirty: true,
+    });
+  };
+
+  const handleAttachmentChange = (urls: string[]) => {
+    setValue("attachment", urls, { shouldDirty: true });
+  };
 
   useEffect(() => {
     if (initialData) {
@@ -64,19 +88,33 @@ export function ProjectForm({
       setValue("description", initialData.description || "");
       setValue("deadline", initialData.deadline || "");
       setValue("status", (initialData.status || "DRAFT") as ProjectStatus);
+      setValue("attachment", initialData.attachment || []);
     }
   }, [initialData, setValue]);
 
+  // ── Merge queued base64 files into attachment, then submit ────────
   const handleFormSubmit = async (data: CreateProjectParams) => {
+    // Merge existing URLs + queued base64 files
+    const allAttachments = [
+      ...(data.attachment || []),
+      ...queuedFiles.map((qf) => qf.base64),
+    ];
+
+    clearUploadFiles();
+
     await onSubmit({
       name: data.name,
       description: data.description || undefined,
       deadline: data.deadline || undefined,
       status: data.status as ProjectStatus,
+      attachment: allAttachments.length > 0 ? allAttachments : undefined,
     });
   };
 
-  const handleDiscard = () => router.push(returnTo);
+  const handleDiscard = () => {
+    clearUploadFiles();
+    router.push(returnTo);
+  };
 
   const handleSaveAndReturn = (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,10 +204,26 @@ export function ProjectForm({
 
               <div className="space-y-2">
                 <Label htmlFor="deadline">Deadline</Label>
-                <Input
+                <DatePicker
                   id="deadline"
-                  type="date"
-                  {...register("deadline")}
+                  date={deadlineDate}
+                  onDateChange={handleDeadlineChange}
+                  placeholder="Select deadline"
+                  disabled={isSubmitting}
+                  disablePastDates
+                  yearRange={{
+                    from: new Date().getFullYear(),
+                    to: new Date().getFullYear() + 5,
+                  }}
+                />
+              </div>
+
+              {/* Attachments — full width */}
+              <div className="space-y-2 md:col-span-2">
+                <Label>Attachments</Label>
+                <FileUpload
+                  value={attachmentValue || []}
+                  onChange={handleAttachmentChange}
                   disabled={isSubmitting}
                 />
               </div>

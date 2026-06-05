@@ -49,10 +49,10 @@ export class TaskService {
         }
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error: sbError } = await (supabase as any)
         .from(this.collection)
         .insert({
-          id: crypto.randomUUID(),
           title: params.title,
           description: params.description || null,
           assigned_to: params.assigned_to || null,
@@ -160,15 +160,17 @@ export class TaskService {
         query = query.eq("assigned_to", filters.assignedTo);
       }
 
-      if (filters?.deadlineStatus === "overdue") {
-        query = query
-          .not("due_date", "is", null)
-          .lt("due_date", new Date().toISOString().split("T")[0])
-          .neq("status", "COMPLETED");
-      } else if (filters?.deadlineStatus === "upcoming") {
-        query = query
-          .not("due_date", "is", null)
-          .gte("due_date", new Date().toISOString().split("T")[0]);
+      if (filters?.deadlineStatus && filters.deadlineStatus !== "all") {
+        if (filters.deadlineStatus === "overdue") {
+          query = query
+            .not("due_date", "is", null)
+            .lt("due_date", new Date().toISOString().split("T")[0])
+            .neq("status", "COMPLETED");
+        } else if (filters.deadlineStatus === "upcoming") {
+          query = query
+            .not("due_date", "is", null)
+            .gte("due_date", new Date().toISOString().split("T")[0]);
+        }
       }
 
       const {

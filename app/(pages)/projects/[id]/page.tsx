@@ -2,9 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { FolderKanban, Calendar, Edit, Trash2, ArrowLeft } from "lucide-react";
+import {
+  FolderKanban,
+  Calendar,
+  Edit,
+  Trash2,
+  ArrowLeft,
+  Paperclip,
+  ExternalLink,
+  Clock,
+  ListChecks,
+} from "lucide-react";
 import { Badge } from "@/components/core/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/core/ui/card";
+import { Card, CardContent } from "@/components/core/ui/card";
 import { Skeleton } from "@/components/core/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -84,15 +94,21 @@ function ProjectDetailsPageContent() {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-5 space-y-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-6 w-28" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
         <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-72" />
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="p-5 space-y-3">
+            <Skeleton className="h-4 w-24" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
           </CardContent>
         </Card>
       </div>
@@ -119,6 +135,10 @@ function ProjectDetailsPageContent() {
       ? (project.created_by as { name: string }).name
       : "Unknown";
 
+  const deadlineDate = project.deadline ? new Date(project.deadline) : null;
+  const isOverdue = deadlineDate && deadlineDate < new Date();
+  const attachmentCount = project.attachment?.length ?? 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -135,6 +155,9 @@ function ProjectDetailsPageContent() {
             <div className="flex items-center gap-2">
               <FolderKanban className="h-5 w-5 text-muted-foreground" />
               <h1 className="text-2xl font-bold">{project.name}</h1>
+              <Badge variant={STATUS_VARIANTS[project.status as ProjectStatus]}>
+                {STATUS_LABELS[project.status as ProjectStatus]}
+              </Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
               Created by {creatorName}
@@ -142,9 +165,6 @@ function ProjectDetailsPageContent() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={STATUS_VARIANTS[project.status as ProjectStatus]}>
-            {STATUS_LABELS[project.status as ProjectStatus]}
-          </Badge>
           <Button
             variant="outline"
             size="sm"
@@ -164,58 +184,172 @@ function ProjectDetailsPageContent() {
         </div>
       </div>
 
-      {/* Project Info */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold">Project Details</h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {project.description && (
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">
-                Description
-              </h3>
-              <p className="text-sm whitespace-pre-wrap">
-                {project.description}
-              </p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">
-                Status
-              </h3>
-              <Badge variant={STATUS_VARIANTS[project.status as ProjectStatus]}>
-                {STATUS_LABELS[project.status as ProjectStatus]}
-              </Badge>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">
-                Deadline
-              </h3>
-              <div className="flex items-center gap-1 text-sm">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                {project.deadline
-                  ? new Date(project.deadline).toLocaleDateString()
-                  : "No deadline set"}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Status
+                </p>
+                <Badge
+                  variant={STATUS_VARIANTS[project.status as ProjectStatus]}
+                  className="text-sm px-3 py-1"
+                >
+                  {STATUS_LABELS[project.status as ProjectStatus]}
+                </Badge>
+              </div>
+              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <ListChecks className="h-4 w-4 text-primary" />
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">
-                Created
-              </h3>
-              <p className="text-sm">
-                {project.created_at
-                  ? new Date(project.created_at).toLocaleDateString()
-                  : "—"}
-              </p>
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Deadline
+                </p>
+                <p
+                  className={`text-sm font-semibold ${isOverdue ? "text-destructive" : ""}`}
+                >
+                  {deadlineDate
+                    ? deadlineDate.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })
+                    : "No deadline"}
+                </p>
+                {deadlineDate && (
+                  <p
+                    className={`text-xs ${isOverdue ? "text-destructive" : "text-muted-foreground"}`}
+                  >
+                    {isOverdue ? "Overdue" : "Pending"}
+                  </p>
+                )}
+              </div>
+              <div
+                className={`h-9 w-9 rounded-lg flex items-center justify-center ${isOverdue ? "bg-destructive/10" : "bg-primary/10"}`}
+              >
+                <Calendar
+                  className={`h-4 w-4 ${isOverdue ? "text-destructive" : "text-primary"}`}
+                />
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Created
+                </p>
+                <p className="text-sm font-semibold">
+                  {project.created_at
+                    ? new Date(project.created_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })
+                    : "—"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  by {creatorName}
+                </p>
+              </div>
+              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Clock className="h-4 w-4 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Attachments
+                </p>
+                <p className="text-sm font-semibold">
+                  {attachmentCount} file{attachmentCount !== 1 ? "s" : ""}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {attachmentCount > 0
+                    ? "Click to view below"
+                    : "No files attached"}
+                </p>
+              </div>
+              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Paperclip className="h-4 w-4 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Description */}
+      {project.description && (
+        <Card>
+          <CardContent className="p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <FolderKanban className="h-4 w-4 text-muted-foreground" />
+              Description
+            </h3>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+              {project.description}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Attachments — External URL style */}
+      {attachmentCount > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Paperclip className="h-4 w-4 text-muted-foreground" />
+              Attachments ({attachmentCount})
+            </h3>
+            <div className="space-y-2">
+              {project.attachment!.map((url, idx) => {
+                const name = url.split("/").pop() || `file-${idx + 1}`;
+                return (
+                  <a
+                    key={url}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3 transition-colors hover:bg-muted/60 hover:border-muted-foreground/30"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                        <Paperclip className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                          {name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {url}
+                        </p>
+                      </div>
+                    </div>
+                    <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0 ml-3 group-hover:text-primary transition-colors" />
+                  </a>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <ConfirmationDialog
         open={isConfirmOpen}

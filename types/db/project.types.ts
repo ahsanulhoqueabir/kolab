@@ -32,6 +32,7 @@ export interface CreateProjectParams {
   description?: string;
   deadline?: string;
   status?: ProjectStatus;
+  attachment?: string[];
 }
 
 export interface UpdateProjectParams {

@@ -22,6 +22,7 @@ function CreateProjectPageContent() {
         description: data.description,
         deadline: data.deadline,
         status: data.status,
+        attachment: data.attachment,
       });
 
       if (result.success) {

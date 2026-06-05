@@ -1,6 +1,7 @@
 import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
 import { LogService } from "@/services/log.service";
+import { R2Service } from "@/services/r2.service";
 import type {
   Project,
   ProjectListItem,
@@ -25,6 +26,12 @@ export class ProjectService {
     try {
       const supabase = getSupabaseServerClient();
 
+      // Process base64 attachments → upload to R2 → get URLs
+      const processedAttachments = params.attachment
+        ? await R2Service.processAttachments(params.attachment, "projects")
+        : [];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error: sbError } = await (supabase as any)
         .from(this.collection)
         .insert({
@@ -33,6 +40,7 @@ export class ProjectService {
           description: params.description || null,
           deadline: params.deadline || null,
           status: params.status || "DRAFT",
+          attachment: processedAttachments,
           created_by: params.created_by,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -104,14 +112,16 @@ export class ProjectService {
         query = query.eq("status", filters.status);
       }
 
-      if (filters?.deadlineStatus === "overdue") {
-        query = query
-          .not("deadline", "is", null)
-          .lt("deadline", new Date().toISOString().split("T")[0]);
-      } else if (filters?.deadlineStatus === "upcoming") {
-        query = query
-          .not("deadline", "is", null)
-          .gte("deadline", new Date().toISOString().split("T")[0]);
+      if (filters?.deadlineStatus && filters.deadlineStatus !== "all") {
+        if (filters.deadlineStatus === "overdue") {
+          query = query
+            .not("deadline", "is", null)
+            .lt("deadline", new Date().toISOString().split("T")[0]);
+        } else if (filters.deadlineStatus === "upcoming") {
+          query = query
+            .not("deadline", "is", null)
+            .gte("deadline", new Date().toISOString().split("T")[0]);
+        }
       }
 
       const {
@@ -182,6 +192,12 @@ export class ProjectService {
   ): Promise<ServiceResult<Project>> {
     try {
       const supabase = getSupabaseServerClient();
+
+      // Process base64 attachments → upload to R2 → get URLs
+      const processedAttachments = params.attachment
+        ? await R2Service.processAttachments(params.attachment, "projects")
+        : undefined;
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: Record<string, any> = {
         updated_at: new Date().toISOString(),
@@ -192,8 +208,8 @@ export class ProjectService {
         updateData.description = params.description;
       if (params.deadline !== undefined) updateData.deadline = params.deadline;
       if (params.status !== undefined) updateData.status = params.status;
-      if (params.attachment !== undefined)
-        updateData.attachment = params.attachment;
+      if (processedAttachments !== undefined)
+        updateData.attachment = processedAttachments;
       if (params.updated_by !== undefined)
         updateData.updated_by = params.updated_by;
 

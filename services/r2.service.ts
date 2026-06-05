@@ -145,12 +145,13 @@ export class R2Service {
       const command = new PutObjectCommand({
         Bucket: r2.bucket,
         Key: key,
-        ContentType: options?.contentType || "application/octet-stream",
         CacheControl: options?.cacheControl,
         Metadata: options?.metadata,
       });
 
-      const url = await getSignedUrl(client, command, { expiresIn });
+      const url = await getSignedUrl(client, command, {
+        expiresIn,
+      });
 
       return {
         success: true,
@@ -378,6 +379,88 @@ export class R2Service {
         exists: false,
         error: message,
       };
+    }
+  }
+
+  // ─── Base64 Attachment Processing ──────────────────────────────────
+
+  /**
+   * Process an array of attachment entries.
+   *
+   * - If an entry is a **base64 data URI** (starts with "data:"), it is
+   *   uploaded to R2 via `uploadObject` and replaced with the resulting
+   *   public URL.
+   * - If an entry is already a **URL** (starts with "http"), it is kept
+   *   as-is.
+   *
+   * @param attachments - Array of strings (base64 data URIs and/or URLs).
+   * @param folder      - R2 folder prefix (e.g. "projects", "tasks").
+   * @returns A new array where all base64 entries are replaced with R2 URLs.
+   */
+  static async processAttachments(
+    attachments: string[],
+    folder = "uploads",
+  ): Promise<string[]> {
+    if (!attachments || !attachments.length) return [];
+
+    const results: string[] = [];
+
+    for (const item of attachments) {
+      // Already a URL → keep as-is
+      if (item.startsWith("http")) {
+        results.push(item);
+        continue;
+      }
+
+      // Base64 data URI → upload to R2
+      if (item.startsWith("data:")) {
+        const uploaded = await this.uploadBase64(item, folder);
+        if (uploaded) {
+          results.push(uploaded);
+        }
+        // If upload fails, we skip the file (don't push anything)
+        continue;
+      }
+
+      // Unknown format — keep as-is
+      results.push(item);
+    }
+
+    return results;
+  }
+
+  /**
+   * Upload a base64 data URI to R2 and return the public URL.
+   */
+  private static async uploadBase64(
+    dataUri: string,
+    folder: string,
+  ): Promise<string | null> {
+    try {
+      // Parse the data URI: "data:image/png;base64,iVBOR..."
+      const matches = dataUri.match(/^data:([^;]+);base64,(.+)$/);
+      if (!matches) return null;
+
+      const contentType = matches[1];
+      const base64Data = matches[2];
+
+      // Decode base64 to buffer
+      const buffer = Buffer.from(base64Data, "base64");
+
+      // Derive a file name from content type
+      const ext = contentType.split("/").pop() || "bin";
+      const fileName = `upload.${ext}`;
+
+      const result = await this.uploadObject({
+        body: buffer,
+        fileName,
+        folder,
+        contentType,
+      });
+
+      return result.publicUrl || null;
+    } catch {
+      return null;
     }
   }
 }

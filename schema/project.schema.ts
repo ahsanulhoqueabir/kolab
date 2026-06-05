@@ -8,6 +8,7 @@ export const PROJECT_DEFAULT_VALUES: CreateProjectParams = {
   description: "",
   deadline: "",
   status: "DRAFT" as ProjectStatus,
+  attachment: [],
 };
 
 export const PROJECT_STATUS_OPTIONS: { value: ProjectStatus; label: string }[] =
