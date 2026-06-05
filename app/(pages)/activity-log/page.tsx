@@ -41,8 +41,8 @@ function ActivityLogPageContent() {
           </p>
         </div>
         <Button
-          variant="outline"
-          size="sm"
+          variant="refresh"
+          size="lg"
           onClick={handleRefresh}
           disabled={isLoading}
         >

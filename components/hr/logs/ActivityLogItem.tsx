@@ -47,8 +47,6 @@ export function ActivityLogItem({ log }: ActivityLogItemProps) {
 
   const tableLabel = TABLE_LABELS[log.table] || log.table;
 
-  const timeAgo = getTimeAgo(new Date(log.created_at));
-
   return (
     <div className="flex items-start gap-3 py-3 border-b last:border-b-0">
       <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
@@ -72,7 +70,7 @@ export function ActivityLogItem({ log }: ActivityLogItemProps) {
           </div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
             <Clock className="h-3 w-3" />
-            {timeAgo}
+            {formatDateInTimezone(log.created_at)}
           </div>
         </div>
       </div>
