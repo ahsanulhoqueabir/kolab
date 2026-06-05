@@ -10,6 +10,8 @@ import { create } from "zustand";
 
 interface TeamState {
   items: TeamMember[];
+  /** Unified list from /api/team/list (all teams or own manager entries) */
+  unifiedItems: TeamMember[];
   pagination: PaginationMeta | null;
   workload: WorkloadItem[];
   isLoading: boolean;
@@ -28,6 +30,7 @@ interface TeamActions {
       pageSize?: number;
     },
   ) => Promise<void>;
+  fetchUnifiedTeam: () => Promise<void>;
   goToPage: (page: number, pageSize?: number) => Promise<void>;
   nextPage: () => Promise<void>;
   prevPage: () => Promise<void>;
@@ -46,6 +49,7 @@ type TeamStore = TeamState & TeamActions;
 
 export const useTeamStore = create<TeamStore>((set, get) => ({
   items: [],
+  unifiedItems: [],
   pagination: null,
   workload: [],
   isLoading: false,
@@ -61,6 +65,9 @@ export const useTeamStore = create<TeamStore>((set, get) => ({
       string,
       unknown
     >);
+
+    // Reset unified items when fetching per-project
+    set({ unifiedItems: [] });
     const cacheKey = `${filterHash}|p${page}|s${pageSize}`;
     const state = get();
 
@@ -157,6 +164,20 @@ export const useTeamStore = create<TeamStore>((set, get) => ({
     }
   },
 
+  fetchUnifiedTeam: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const res = await api_client.get("/team/list");
+      const data = (res.data?.data as TeamMember[]) ?? [];
+      set({ unifiedItems: data, items: [], isLoading: false });
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error || "Failed to fetch unified team";
+      set({ error: message, isLoading: false });
+    }
+  },
+
   goToPage: async (page, pageSize) => {
     const state = get();
     let filters: Record<string, unknown> = {};
@@ -227,6 +248,7 @@ export const useTeamStore = create<TeamStore>((set, get) => ({
   clearCache: () => {
     set({
       items: [],
+      unifiedItems: [],
       pagination: null,
       pageCache: new Map(),
       fullyLoadedFilters: new Set(),

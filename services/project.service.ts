@@ -2,6 +2,7 @@ import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
 import { LogService } from "@/services/log.service";
 import { R2Service } from "@/services/r2.service";
+import { TeamService } from "@/services/team.service";
 import { paginated } from "@/lib/pagination";
 import { dbTimestamp } from "@/lib/date.utils";
 import type {
@@ -53,11 +54,31 @@ export class ProjectService {
         return error(sbError.message);
       }
 
+      const projectId = (data as Project).id;
+
+      // Auto-create team entry for the creator as MANAGER
+      const teamResult = await TeamService.addMember({
+        project: projectId,
+        profile: params.created_by,
+        role: "MANAGER",
+      });
+
+      if (!teamResult.success) {
+        // Non-fatal: log but don't fail the project creation
+        LogService.create({
+          actor: params.created_by,
+          table: "team",
+          row: projectId,
+          action: "CREATE",
+          description: `Auto-add creator as MANAGER failed: ${teamResult.error}`,
+        });
+      }
+
       // Fire-and-forget: log the creation
       LogService.create({
         actor: params.created_by,
         table: "project",
-        row: (data as Project).id,
+        row: projectId,
         action: "CREATE",
         description: LogService.describeProject("CREATE", params.name),
       });

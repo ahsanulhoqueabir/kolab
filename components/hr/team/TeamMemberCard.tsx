@@ -13,13 +13,14 @@ import { formatDateInTimezone } from "@/lib/date.utils";
 interface TeamMemberCardProps {
   member: {
     id: string;
+    project?: { id: string; name: string } | string;
     profile:
       | { id: string; name: string; email: string; image?: string | null }
       | string;
     role: TeamRole;
     created_at: string;
   };
-  onRemove: (profileId: string) => void;
+  onRemove: (profileId: string, projectId?: string) => void;
 }
 
 export function TeamMemberCard({ member, onRemove }: TeamMemberCardProps) {
@@ -27,6 +28,11 @@ export function TeamMemberCard({ member, onRemove }: TeamMemberCardProps) {
     typeof member.profile === "object" && member.profile !== null
       ? member.profile
       : null;
+
+  const projectId =
+    typeof member.project === "object" && member.project !== null
+      ? (member.project as { id: string }).id
+      : undefined;
 
   const profileId = profile?.id || (member.profile as string);
   const name = profile?.name || "Unknown";
@@ -53,7 +59,7 @@ export function TeamMemberCard({ member, onRemove }: TeamMemberCardProps) {
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={() => onRemove(profileId)}
+          onClick={() => onRemove(profileId, projectId)}
         >
           <Trash2 className="h-3.5 w-3.5 text-destructive" />
         </Button>

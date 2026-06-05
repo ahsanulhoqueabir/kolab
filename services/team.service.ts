@@ -230,6 +230,48 @@ export class TeamService {
   }
 
   /**
+   * Unified team listing that respects permission conditions.
+   *
+   * - If `all` is true: returns ALL team entries, grouped by project.
+   * - If `own` is true: returns only entries where the profile matches and role is MANAGER.
+   */
+  static async listUnified(params: {
+    profileId: string;
+    conditions: { all?: boolean; own?: boolean };
+  }): Promise<ServiceResult<TeamMember[]>> {
+    try {
+      const supabase = getSupabaseServerClient();
+
+      const query = supabase
+        .from(this.collection)
+        .select(
+          "id, project (id, name), profile (id, name, email, image), role, created_at",
+        )
+        .order("created_at", { ascending: true });
+
+      if (params.conditions.all) {
+        // Return all — no extra filter
+      } else if (params.conditions.own) {
+        // Only MANAGER entries for this profile
+        query.eq("profile", params.profileId).eq("role", "MANAGER");
+      } else {
+        // Fallback: own
+        query.eq("profile", params.profileId).eq("role", "MANAGER");
+      }
+
+      const { data, error: sbError } = await query;
+
+      if (sbError) {
+        return error(sbError.message);
+      }
+
+      return success((data || []) as unknown as TeamMember[]);
+    } catch (err) {
+      return error((err as Error).message || "Failed to fetch unified team");
+    }
+  }
+
+  /**
    * Get workload summary per member.
    * If projectId is provided, scoped to that project.
    */

@@ -1,16 +1,22 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { UserPlus, X } from "lucide-react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { UserPlus, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/core/ui/label";
 import { Button } from "@/components/ui/button";
-import { useUserStore } from "@/store/user.store";
 import { SearchComboBox } from "@/components/core/shared/SearchComboBox";
+import { useUserStore } from "@/store/user.store";
+import { useProjectStore } from "@/store/project.store";
 
 interface AddMemberDialogProps {
-  projectId: string;
-  onAdd: (profileId: string, role: "MEMBER" | "MANAGER") => void;
+  onAdd: (
+    projectId: string,
+    profileId: string,
+    role: "MEMBER" | "MANAGER",
+  ) => void;
+  /** If provided, auto-selects this project when the dialog opens */
+  defaultProjectId?: string;
   disabled?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -19,10 +25,10 @@ interface AddMemberDialogProps {
 export function AddMemberDialog({
   onAdd,
   disabled,
+  defaultProjectId,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: AddMemberDialogProps) {
-  const { items: users, fetchUsers } = useUserStore();
   const [internalOpen, setInternalOpen] = useState(false);
 
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -31,36 +37,87 @@ export function AddMemberDialog({
       ? controlledOnOpenChange
       : setInternalOpen;
 
+  const [selectedProject, setSelectedProject] = useState("");
   const [selectedUser, setSelectedUser] = useState("");
   const [selectedRole, setSelectedRole] = useState<"MEMBER" | "MANAGER">(
     "MEMBER",
   );
 
+  // ── Use stores ──
+  const {
+    searchResults: userResults,
+    isSearching: isUserSearching,
+    searchUsers,
+    clearSearch,
+  } = useUserStore();
+
+  const {
+    searchResults: projectResults,
+    isSearching: isProjectSearching,
+    searchProjects,
+  } = useProjectStore();
+
+  // ── Auto-select default project when dialog opens ──
+  // Use a ref to track the previous open state so we only reset on open
+  const prevOpenRef = useRef(open);
   useEffect(() => {
-    if (open) {
-      fetchUsers();
+    if (open && !prevOpenRef.current && defaultProjectId) {
+      setSelectedProject(defaultProjectId);
     }
-  }, [open, fetchUsers]);
+    prevOpenRef.current = open;
+  }, [open, defaultProjectId]);
+
+  // ── Dynamic search handlers ──
+  const handleUserSearch = useCallback(
+    async (query: string) => {
+      await searchUsers(query);
+      const results = useUserStore.getState().searchResults || [];
+      return results.map((u) => ({
+        value: u.id,
+        label: `${u.name} (${u.email})`,
+      }));
+    },
+    [searchUsers],
+  );
+
+  const handleProjectSearch = useCallback(
+    async (query: string) => {
+      await searchProjects(query);
+      const results = useProjectStore.getState().searchResults || [];
+      return results.map((p) => ({
+        value: p.id,
+        label: p.name,
+      }));
+    },
+    [searchProjects],
+  );
 
   const handleAdd = () => {
-    if (!selectedUser) return;
-    onAdd(selectedUser, selectedRole);
+    if (!selectedProject || !selectedUser) return;
+    onAdd(selectedProject, selectedUser, selectedRole);
     setOpen(false);
+    setSelectedProject("");
     setSelectedUser("");
     setSelectedRole("MEMBER");
   };
 
-  const memberOptions = useMemo(() => {
-    return (users || []).map((u) => ({
-      value: u.id,
-      label: `${u.name} (${u.email})`,
-    }));
-  }, [users]);
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) {
+      // Clear search state on close
+      clearSearch();
+    }
+  };
 
-  const roleOptions = [
-    { value: "MEMBER", label: "Member" },
-    { value: "MANAGER", label: "Manager" },
-  ];
+  const roleOptions = useMemo(
+    () => [
+      { value: "MEMBER" as const, label: "Member" },
+      { value: "MANAGER" as const, label: "Manager" },
+    ],
+    [],
+  );
+
+  const canSubmit = selectedProject && selectedUser;
 
   return (
     <>
@@ -69,7 +126,7 @@ export function AddMemberDialog({
         variant="default"
         size="sm"
         disabled={disabled}
-        onClick={() => setOpen(true)}
+        onClick={() => handleOpenChange(true)}
       >
         <UserPlus className="h-4 w-4 mr-1.5" />
         Add Member
@@ -81,7 +138,7 @@ export function AddMemberDialog({
           "fixed inset-0 z-50 bg-black/60 backdrop-blur-xs transition-opacity duration-300 pointer-events-none",
           open ? "opacity-100 pointer-events-auto" : "opacity-0",
         )}
-        onClick={() => setOpen(false)}
+        onClick={() => handleOpenChange(false)}
       />
 
       {/* Sliding Panel Sheet */}
@@ -99,12 +156,12 @@ export function AddMemberDialog({
               Add Team Member
             </h2>
             <p className="text-xs text-muted-foreground mt-1">
-              Add a user to this project team to collaborate.
+              Select a project, user, and role to add a team member.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={() => handleOpenChange(false)}
             className="rounded-full p-1.5 hover:bg-muted text-muted-foreground transition-colors"
           >
             <X className="h-5 w-5" />
@@ -113,20 +170,41 @@ export function AddMemberDialog({
 
         {/* Form Content */}
         <div className="flex-1 space-y-5">
+          {/* Project selector */}
+          <div className="space-y-2">
+            <Label htmlFor="project" className="text-sm font-medium">
+              Select Project
+            </Label>
+            <SearchComboBox
+              options={[]}
+              value={selectedProject}
+              onValueChange={setSelectedProject}
+              placeholder="Search for a project..."
+              searchPlaceholder="Type to search projects..."
+              emptyMessage="No projects found."
+              onSearch={handleProjectSearch}
+              isSearching={isProjectSearching}
+            />
+          </div>
+
+          {/* Member selector */}
           <div className="space-y-2">
             <Label htmlFor="member" className="text-sm font-medium">
               Select Member
             </Label>
             <SearchComboBox
-              options={memberOptions}
+              options={[]}
               value={selectedUser}
               onValueChange={setSelectedUser}
-              placeholder="Choose a user"
-              searchPlaceholder="Search users..."
+              placeholder="Search for a user..."
+              searchPlaceholder="Type to search users..."
               emptyMessage="No users found."
+              onSearch={handleUserSearch}
+              isSearching={isUserSearching}
             />
           </div>
 
+          {/* Role selector */}
           <div className="space-y-2">
             <Label htmlFor="role" className="text-sm font-medium">
               Role
@@ -149,12 +227,19 @@ export function AddMemberDialog({
           <Button
             type="button"
             variant="outline"
-            onClick={() => setOpen(false)}
+            onClick={() => handleOpenChange(false)}
           >
             Cancel
           </Button>
-          <Button type="button" onClick={handleAdd} disabled={!selectedUser}>
-            Add to Team
+          <Button type="button" onClick={handleAdd} disabled={!canSubmit}>
+            {isUserSearching || isProjectSearching ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                Searching...
+              </>
+            ) : (
+              "Add to Team"
+            )}
           </Button>
         </div>
       </div>

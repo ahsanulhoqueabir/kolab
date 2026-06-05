@@ -26,6 +26,14 @@ interface SearchComboBoxProps {
   showCreate?: boolean;
   /** Called when the plus button is clicked */
   onCreateNew?: () => void;
+  /**
+   * Async search callback — fires when the user types.
+   * When provided, the dropdown shows results from this callback
+   * instead of filtering the static `options` array locally.
+   */
+  onSearch?: (query: string) => Promise<ComboBoxOption[]> | ComboBoxOption[];
+  /** Show a loading spinner inside the dropdown while searching */
+  isSearching?: boolean;
 }
 
 export function SearchComboBox({
@@ -40,17 +48,78 @@ export function SearchComboBox({
   showCreate = false,
   createLabel = "Create new",
   onCreateNew,
+  onSearch,
+  isSearching = false,
 }: SearchComboBoxProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [asyncResults, setAsyncResults] = useState<ComboBoxOption[] | null>(
+    null,
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
-  const selectedLabel = options.find((opt) => opt.value === value)?.label || "";
+  // Keep a map of value→label from async results so the trigger
+  // button can display the selected label even when options={[]}
+  // Using a ref is fine — we just need to read it outside render.
+  const selectedLabelMapRef = useRef<Map<string, string>>(new Map());
 
-  const filteredOptions = options.filter((opt) =>
-    opt.label.toLowerCase().includes(search.toLowerCase()),
-  );
+  // Store the label in state so we never read a ref during render.
+  // We keep it in sync via a dedicated effect whenever the value or
+  // the async results change.
+  const [resolvedLabel, setResolvedLabel] = useState("");
+
+  // Sync resolvedLabel whenever value or options/asyncResults change
+  useEffect(() => {
+    if (!value) {
+      setResolvedLabel("");
+      return;
+    }
+    const fromOptions = options.find((opt) => opt.value === value)?.label;
+    if (fromOptions) {
+      setResolvedLabel(fromOptions);
+      return;
+    }
+    // Fall back to the map populated by async search results
+    const fromMap = selectedLabelMapRef.current.get(value);
+    if (fromMap) {
+      setResolvedLabel(fromMap);
+    }
+  }, [value, options]);
+
+  // When async search is enabled, call onSearch as the user types
+  useEffect(() => {
+    if (!onSearch || !open) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!search.trim()) {
+      setAsyncResults(null);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      const results = await onSearch(search.trim());
+      setAsyncResults(results);
+      // Populate the label map so selected label persists after dropdown closes
+      const map = selectedLabelMapRef.current;
+      for (const opt of results) {
+        map.set(opt.value, opt.label);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [search, onSearch, open]);
+
+  const displayOptions = asyncResults !== null ? asyncResults : options;
+
+  const filteredOptions = onSearch
+    ? displayOptions
+    : displayOptions.filter((opt) =>
+        opt.label.toLowerCase().includes(search.toLowerCase()),
+      );
 
   // Close on outside click
   useEffect(() => {
@@ -81,11 +150,17 @@ export function SearchComboBox({
         onValueChange("");
       } else {
         onValueChange(optionValue);
+        // Store the label for the selected value so the trigger shows it
+        const allOpts = asyncResults || options;
+        const selected = allOpts.find((o) => o.value === optionValue);
+        if (selected) {
+          selectedLabelMapRef.current.set(optionValue, selected.label);
+        }
       }
       setOpen(false);
       setSearch("");
     },
-    [onValueChange, value],
+    [onValueChange, value, asyncResults, options],
   );
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -109,7 +184,7 @@ export function SearchComboBox({
           !value && "text-muted-foreground",
         )}
       >
-        <span className="truncate">{value ? selectedLabel : placeholder}</span>
+        <span className="truncate">{value ? resolvedLabel : placeholder}</span>
         <ChevronDown
           className={cn(
             "ml-2 h-4 w-4 shrink-0 text-muted-foreground transition-transform",
@@ -157,7 +232,11 @@ export function SearchComboBox({
 
           {/* Options */}
           <div className="max-h-60 overflow-auto mt-2 space-y-1">
-            {filteredOptions.length === 0 ? (
+            {isSearching ? (
+              <div className="py-4 text-center text-sm text-muted-foreground">
+                Searching...
+              </div>
+            ) : filteredOptions.length === 0 ? (
               <div className="py-4 text-center text-sm text-muted-foreground">
                 {emptyMessage}
               </div>

@@ -41,6 +41,13 @@ export const PERMISSION_MODULES: PermissionGroup[] = [
   },
 
   {
+    label: "Team Management",
+    permissions: [
+      { resource: "team", action: "read", condition: "all" },
+      { resource: "team", action: "read", condition: "own" },
+    ],
+  },
+  {
     label: "Activity Log",
     permissions: [{ resource: "log", action: "read", condition: "all" }],
   },
@@ -267,7 +274,7 @@ export const PAGE_TO_RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
   "/my-tasks": ["task:read:assigned"],
 
   // Team
-  "/team": ["project:read:all", "project:read:own"],
+  "/team": ["team:read:all", "team:read:own"],
 
   // Activity Log
   "/activity-log": ["log:read:all"],
