@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Plus, FileText, Trash2, Calendar, User } from "lucide-react";
 import { Badge } from "@/components/core/ui/badge";
 import { ListPage } from "@/components/core/shared/list-page";
@@ -16,6 +16,7 @@ import { TaskListCard } from "@/components/hr/tasks/TaskListCard";
 import { TaskStatusBadge } from "@/components/hr/tasks/TaskStatusBadge";
 import { TaskPriorityBadge } from "@/components/hr/tasks/TaskPriorityBadge";
 import { useReturnUrl } from "@/hooks/use-return-url";
+import { useDebounce } from "@/hooks/use-debounce";
 import { formatDateInTimezone } from "@/lib/date.utils";
 import {
   Select,
@@ -46,6 +47,14 @@ const TasksPageContent = () => {
   const fetchUsers = useUserStore((state) => state.fetchUsers);
   const users = useUserStore((state) => state.items);
 
+  // Search — store-managed via debounced API calls
+  const searchResults = useTaskStore((state) => state.searchResults);
+  const isSearching = useTaskStore((state) => state.isSearching);
+  const searchTasks = useTaskStore((state) => state.searchTasks);
+  const clearSearch = useTaskStore((state) => state.clearSearch);
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 400);
+
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pendingDeleteName, setPendingDeleteName] = useState<string>("");
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -62,6 +71,22 @@ const TasksPageContent = () => {
     fetchProjects();
     fetchUsers();
   }, [fetchTasks, fetchProjects, fetchUsers]);
+
+  // Debounced search — delegates to store
+  useEffect(() => {
+    if (!debouncedSearch.trim()) {
+      clearSearch();
+      return;
+    }
+    searchTasks(debouncedSearch);
+  }, [debouncedSearch, searchTasks, clearSearch]);
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  // Determine which data to show
+  const displayData = searchResults !== null ? searchResults : (tasks ?? []);
 
   // Apply filters
   useEffect(() => {
@@ -207,6 +232,7 @@ const TasksPageContent = () => {
     search: {
       fields: ["title", "description"],
       placeholder: "Search tasks...",
+      onSearchChange: handleSearchChange,
     },
 
     actions: {
@@ -363,8 +389,8 @@ const TasksPageContent = () => {
       </div>
 
       <ListPage
-        data={tasks ?? []}
-        loading={loading}
+        data={displayData}
+        loading={loading || isSearching}
         error={null}
         config={{
           ...config,

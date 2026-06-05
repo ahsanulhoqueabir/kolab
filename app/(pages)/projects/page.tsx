@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Plus, FolderKanban, Trash2, Calendar } from "lucide-react";
 import { Badge } from "@/components/core/ui/badge";
 import { ListPage } from "@/components/core/shared/list-page";
@@ -12,6 +12,7 @@ import { PageAccessGuard } from "@/components/core/PageAccessGuard";
 import { ConfirmationDialog } from "@/components/core/shared/ConfirmationDialog";
 import { ProjectListCard } from "@/components/hr/projects/ProjectListCard";
 import { useReturnUrl } from "@/hooks/use-return-url";
+import { useDebounce } from "@/hooks/use-debounce";
 import { formatDateInTimezone } from "@/lib/date.utils";
 import type { ListPageConfig } from "@/components/core/shared/list-page";
 import type { ProjectListItem, ProjectStatus } from "@/types/db/project.types";
@@ -43,6 +44,14 @@ const ProjectsPageContent = () => {
   const fetchProjects = useProjectStore((state) => state.fetchProjects);
   const refetchProjects = useProjectStore((state) => state.refetchProjects);
   const goToPage = useProjectStore((state) => state.goToPage);
+
+  // Search — store-managed via debounced API calls
+  const searchResults = useProjectStore((state) => state.searchResults);
+  const isSearching = useProjectStore((state) => state.isSearching);
+  const searchProjects = useProjectStore((state) => state.searchProjects);
+  const clearSearch = useProjectStore((state) => state.clearSearch);
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 400);
   const nextPage = useProjectStore((state) => state.nextPage);
   const prevPage = useProjectStore((state) => state.prevPage);
   const deleteProject = useProjectStore((state) => state.deleteProject);
@@ -54,6 +63,22 @@ const ProjectsPageContent = () => {
   useEffect(() => {
     fetchProjects();
   }, [fetchProjects]);
+
+  // Debounced search — delegates to store
+  useEffect(() => {
+    if (!debouncedSearch.trim()) {
+      clearSearch();
+      return;
+    }
+    searchProjects(debouncedSearch);
+  }, [debouncedSearch, searchProjects, clearSearch]);
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  // Determine which data to show
+  const displayData = searchResults !== null ? searchResults : (projects ?? []);
 
   const handleConfirmedDelete = async () => {
     if (pendingDeleteId === null) return;
@@ -170,6 +195,7 @@ const ProjectsPageContent = () => {
     search: {
       fields: ["name"],
       placeholder: "Search projects...",
+      onSearchChange: handleSearchChange,
     },
 
     filters: [
@@ -259,8 +285,8 @@ const ProjectsPageContent = () => {
   return (
     <div className="">
       <ListPage
-        data={projects ?? []}
-        loading={loading}
+        data={displayData}
+        loading={loading || isSearching}
         error={null}
         config={{
           ...config,

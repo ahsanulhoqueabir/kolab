@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Plus, Shield, Trash2, Users } from "lucide-react";
 import { Badge } from "@/components/core/ui/badge";
 import { ListPage } from "@/components/core/shared/list-page";
@@ -23,6 +23,7 @@ import {
 } from "@/components/core/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useReturnUrl } from "@/hooks/use-return-url";
+import { useDebounce } from "@/hooks/use-debounce";
 import type { ListPageConfig } from "@/components/core/shared/list-page";
 import type { RoleDeleteMeta } from "@/types/service/delete-status.types";
 
@@ -47,6 +48,14 @@ const RolesPageContent = () => {
   const checkDeleteStatus = useRoleStore((state) => state.checkDeleteStatus);
   const bulkDeleteRoles = useRoleStore((state) => state.bulkDeleteRoles);
 
+  // Search — store-managed via debounced API calls
+  const searchResults = useRoleStore((state) => state.searchResults);
+  const isSearching = useRoleStore((state) => state.isSearching);
+  const searchRoles = useRoleStore((state) => state.searchRoles);
+  const clearSearch = useRoleStore((state) => state.clearSearch);
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 400);
+
   // Confirmation dialog state
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pendingDeleteName, setPendingDeleteName] = useState<string>("");
@@ -64,6 +73,22 @@ const RolesPageContent = () => {
   useEffect(() => {
     fetchRoles();
   }, [fetchRoles]);
+
+  // Debounced search — delegates to store
+  useEffect(() => {
+    if (!debouncedSearch.trim()) {
+      clearSearch();
+      return;
+    }
+    searchRoles(debouncedSearch);
+  }, [debouncedSearch, searchRoles, clearSearch]);
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  // Determine which data to show
+  const displayData = searchResults !== null ? searchResults : (roles ?? []);
 
   const handleConfirmedDelete = async () => {
     if (pendingDeleteId === null) return;
@@ -157,6 +182,7 @@ const RolesPageContent = () => {
     search: {
       fields: ["name"],
       placeholder: "Search roles...",
+      onSearchChange: handleSearchChange,
     },
 
     actions: {
@@ -231,8 +257,8 @@ const RolesPageContent = () => {
   return (
     <div className="">
       <ListPage
-        data={roles ?? []}
-        loading={loadingRoles}
+        data={displayData}
+        loading={loadingRoles || isSearching}
         error={null}
         config={{
           ...config,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Plus, User, Trash2 } from "lucide-react";
 import { Badge } from "@/components/core/ui/badge";
 import { ListPage } from "@/components/core/shared/list-page";
@@ -12,6 +12,7 @@ import { PageAccessGuard } from "@/components/core/PageAccessGuard";
 import { ConfirmationDialog } from "@/components/core/shared/ConfirmationDialog";
 import { UserListCard } from "@/components/hr/users/UserListCard";
 import { useReturnUrl } from "@/hooks/use-return-url";
+import { useDebounce } from "@/hooks/use-debounce";
 import { formatDateInTimezone } from "@/lib/date.utils";
 import type { ListPageConfig } from "@/components/core/shared/list-page";
 import type { UserListItem } from "@/types/db/user.types";
@@ -30,6 +31,14 @@ const UsersPageContent = () => {
   const prevPage = useUserStore((state) => state.prevPage);
   const deleteUser = useUserStore((state) => state.deleteUser);
 
+  // Search — store-managed via debounced API calls
+  const searchResults = useUserStore((state) => state.searchResults);
+  const isSearching = useUserStore((state) => state.isSearching);
+  const searchUsers = useUserStore((state) => state.searchUsers);
+  const clearSearch = useUserStore((state) => state.clearSearch);
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 400);
+
   // Confirmation dialog state
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pendingDeleteName, setPendingDeleteName] = useState<string>("");
@@ -38,6 +47,22 @@ const UsersPageContent = () => {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  // Debounced search — delegates to store
+  useEffect(() => {
+    if (!debouncedSearch.trim()) {
+      clearSearch();
+      return;
+    }
+    searchUsers(debouncedSearch);
+  }, [debouncedSearch, searchUsers, clearSearch]);
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  // Determine which data to show
+  const displayData = searchResults !== null ? searchResults : (users ?? []);
 
   const handleConfirmedDelete = async () => {
     if (pendingDeleteId === null) return;
@@ -127,6 +152,7 @@ const UsersPageContent = () => {
     search: {
       fields: ["name", "email"],
       placeholder: "Search by name or email...",
+      onSearchChange: handleSearchChange,
     },
 
     actions: {
@@ -184,8 +210,8 @@ const UsersPageContent = () => {
   return (
     <div className="">
       <ListPage
-        data={users ?? []}
-        loading={loading}
+        data={displayData}
+        loading={loading || isSearching}
         error={null}
         config={{
           ...config,

@@ -77,6 +77,8 @@ export interface ListPageConfig<T> {
   search?: {
     fields: string[];
     placeholder?: string;
+    /** If provided, search becomes server-side — calls this on each keystroke */
+    onSearchChange?: (query: string) => void;
   };
   filters?: ListPageFilter[];
   /** Called when a filter value changes. Receives a record of { filterKey: value } */
@@ -175,10 +177,12 @@ export function ListPage<T extends { id?: string | number }>({
   };
 
   // Filtering
+  const isServerSearch = Boolean(config.search?.onSearchChange);
   const filteredData = React.useMemo(() => {
     let result = [...data];
 
-    if (searchQuery && config.search) {
+    // Only do client-side filtering when NOT using server-side search
+    if (!isServerSearch && searchQuery && config.search) {
       const query = searchQuery.toLowerCase();
       result = result.filter((item: any) => {
         return config.search!.fields.some((field) => {
@@ -199,7 +203,7 @@ export function ListPage<T extends { id?: string | number }>({
     }
 
     return result;
-  }, [data, searchQuery, config.search, sortKey, sortOrder]);
+  }, [data, searchQuery, config.search, sortKey, sortOrder, isServerSearch]);
 
   // Pagination — use server-side meta when available, else client-side
   const isServerPaginated = Boolean(config.pagination?.totalPages);
@@ -325,7 +329,11 @@ export function ListPage<T extends { id?: string | number }>({
               placeholder={config.search.placeholder || "Search..."}
               className="pl-8"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                config.search?.onSearchChange?.(val);
+              }}
             />
           </div>
         )}
