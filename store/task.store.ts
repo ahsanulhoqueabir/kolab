@@ -17,6 +17,8 @@ interface TaskState {
   pageCache: Map<string, CachedPage<TaskListItem>>;
   fullyLoadedFilters: Set<string>;
   currentFilterHash: string;
+  searchResults: TaskListItem[] | null;
+  isSearching: boolean;
 }
 
 interface TaskActions {
@@ -51,6 +53,8 @@ interface TaskActions {
     id: string,
     status: TaskStatus,
   ) => Promise<{ success: boolean; data?: TaskListItem; message?: string }>;
+  searchTasks: (query: string) => Promise<void>;
+  clearSearch: () => void;
   clearCache: () => void;
 }
 
@@ -64,6 +68,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   pageCache: new Map(),
   fullyLoadedFilters: new Set(),
   currentFilterHash: "",
+  searchResults: null,
+  isSearching: false,
 
   fetchTasks: async (filters = {}) => {
     const page = filters.page || 1;
@@ -278,6 +284,29 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     }
   },
 
+  searchTasks: async (query: string) => {
+    if (!query.trim()) {
+      set({ searchResults: null, isSearching: false });
+      return;
+    }
+    set({ isSearching: true });
+    try {
+      const res = await api_client.get(
+        `/search?type=task&value=${encodeURIComponent(query.trim())}`,
+      );
+      set({
+        searchResults: (res.data?.data as TaskListItem[]) ?? [],
+        isSearching: false,
+      });
+    } catch {
+      set({ searchResults: [], isSearching: false });
+    }
+  },
+
+  clearSearch: () => {
+    set({ searchResults: null, isSearching: false });
+  },
+
   clearCache: () => {
     set({
       items: [],
@@ -285,6 +314,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       pageCache: new Map(),
       fullyLoadedFilters: new Set(),
       currentFilterHash: "",
+      searchResults: null,
+      isSearching: false,
     });
   },
 }));

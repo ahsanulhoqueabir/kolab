@@ -199,6 +199,29 @@ export class TaskService {
   }
 
   /**
+   * Search tasks by title (partial match). Returns max 10 results.
+   */
+  static async search(value: string): Promise<ServiceResult<TaskListItem[]>> {
+    try {
+      const supabase = getSupabaseServerClient();
+
+      const { data, error: sbError } = await supabase
+        .from(this.collection)
+        .select(
+          "id, title, description, due_date, priority, status, project (id, name), assigned_to (id, name), created_at",
+        )
+        .ilike("title", `%${value}%`)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (sbError) return error(sbError.message);
+      return success((data || []) as unknown as TaskListItem[]);
+    } catch (err) {
+      return error((err as Error).message || "Failed to search tasks");
+    }
+  }
+
+  /**
    * Find a single task by ID.
    */
   static async find(id: string): Promise<ServiceResult<Task>> {

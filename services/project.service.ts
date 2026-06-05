@@ -163,6 +163,41 @@ export class ProjectService {
   }
 
   /**
+   * Search projects by name (partial match). Returns max 10 results with task counts.
+   */
+  static async search(
+    value: string,
+  ): Promise<ServiceResult<ProjectListItem[]>> {
+    try {
+      const supabase = getSupabaseServerClient();
+
+      const { data, error: sbError } = await supabase
+        .from(this.collection)
+        .select("id, name, status, deadline, created_by (id, name)")
+        .ilike("name", `%${value}%`)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (sbError) return error(sbError.message);
+
+      // Attach task counts
+      const projectsWithCounts = await Promise.all(
+        (data || []).map(async (project) => {
+          const { count: taskCount } = await supabase
+            .from("task")
+            .select("id", { count: "exact", head: true })
+            .eq("project", project.id);
+          return { ...project, task_count: taskCount || 0 };
+        }),
+      );
+
+      return success(projectsWithCounts as unknown as ProjectListItem[]);
+    } catch (err) {
+      return error((err as Error).message || "Failed to search projects");
+    }
+  }
+
+  /**
    * Find a single project by ID.
    */
   static async find(id: string): Promise<ServiceResult<Project>> {

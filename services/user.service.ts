@@ -82,6 +82,27 @@ export class UserService {
   }
 
   /**
+   * Search users by name or email (partial match). Returns max 10 results.
+   */
+  static async search(value: string): Promise<ServiceResult<UserListItem[]>> {
+    try {
+      const supabase = getSupabaseServerClient();
+
+      const { data, error: sbError } = await supabase
+        .from(this.collection)
+        .select("id, name, email, image, active, role (id, name), created_at")
+        .or(`name.ilike.%${value}%,email.ilike.%${value}%`)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (sbError) return error(sbError.message);
+      return success((data || []) as unknown as UserListItem[]);
+    } catch (err) {
+      return error((err as Error).message || "Failed to search users");
+    }
+  }
+
+  /**
    * Create a new profile with hashed password and role assignment.
    */
   static async create(params: CreateUserParams): Promise<ServiceResult<User>> {

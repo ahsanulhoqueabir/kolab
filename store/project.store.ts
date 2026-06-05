@@ -17,6 +17,8 @@ interface ProjectState {
   pageCache: Map<string, CachedPage<ProjectListItem>>;
   fullyLoadedFilters: Set<string>;
   currentFilterHash: string;
+  searchResults: ProjectListItem[] | null;
+  isSearching: boolean;
 }
 
 interface ProjectActions {
@@ -46,6 +48,8 @@ interface ProjectActions {
   deleteProject: (
     id: string,
   ) => Promise<{ success: boolean; message?: string }>;
+  searchProjects: (query: string) => Promise<void>;
+  clearSearch: () => void;
   clearCache: () => void;
 }
 
@@ -59,6 +63,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   pageCache: new Map(),
   fullyLoadedFilters: new Set(),
   currentFilterHash: "",
+  searchResults: null,
+  isSearching: false,
 
   fetchProjects: async (filters = {}) => {
     const page = filters.page || 1;
@@ -263,6 +269,29 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
   },
 
+  searchProjects: async (query: string) => {
+    if (!query.trim()) {
+      set({ searchResults: null, isSearching: false });
+      return;
+    }
+    set({ isSearching: true });
+    try {
+      const res = await api_client.get(
+        `/search?type=project&value=${encodeURIComponent(query.trim())}`,
+      );
+      set({
+        searchResults: (res.data?.data as ProjectListItem[]) ?? [],
+        isSearching: false,
+      });
+    } catch {
+      set({ searchResults: [], isSearching: false });
+    }
+  },
+
+  clearSearch: () => {
+    set({ searchResults: null, isSearching: false });
+  },
+
   clearCache: () => {
     set({
       items: [],
@@ -270,6 +299,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       pageCache: new Map(),
       fullyLoadedFilters: new Set(),
       currentFilterHash: "",
+      searchResults: null,
+      isSearching: false,
     });
   },
 }));

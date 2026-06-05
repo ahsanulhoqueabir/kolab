@@ -29,6 +29,8 @@ interface RoleState {
   pageCache: Map<string, CachedPage<RoleRes>>;
   fullyLoadedFilters: Set<string>;
   currentFilterHash: string;
+  searchResults: RoleRes[] | null;
+  isSearching: boolean;
 }
 
 interface RoleActions {
@@ -68,6 +70,8 @@ interface RoleActions {
   bulkDeleteRoles: (
     ids: string[],
   ) => Promise<{ success: boolean; deletedCount: number; failedCount: number }>;
+  searchRoles: (query: string) => Promise<void>;
+  clearSearch: () => void;
   clearCache: () => void;
 }
 
@@ -164,6 +168,8 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
   pageCache: new Map(),
   fullyLoadedFilters: new Set(),
   currentFilterHash: "",
+  searchResults: null,
+  isSearching: false,
 
   fetchRoles: async (filters = {}) => {
     const page = filters.page || 1;
@@ -562,6 +568,29 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
     }
   },
 
+  searchRoles: async (query: string) => {
+    if (!query.trim()) {
+      set({ searchResults: null, isSearching: false });
+      return;
+    }
+    set({ isSearching: true });
+    try {
+      const res = await api_client.get(
+        `/search?type=role&value=${encodeURIComponent(query.trim())}`,
+      );
+      set({
+        searchResults: (res.data?.data as RoleRes[]) ?? [],
+        isSearching: false,
+      });
+    } catch {
+      set({ searchResults: [], isSearching: false });
+    }
+  },
+
+  clearSearch: () => {
+    set({ searchResults: null, isSearching: false });
+  },
+
   clearCache: () => {
     set({
       items: [],
@@ -569,6 +598,8 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
       pageCache: new Map(),
       fullyLoadedFilters: new Set(),
       currentFilterHash: "",
+      searchResults: null,
+      isSearching: false,
     });
   },
 }));

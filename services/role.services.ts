@@ -178,6 +178,27 @@ export class RoleService {
     }
   }
 
+  /**
+   * Search roles by name (partial match). Returns max 10 results.
+   */
+  static async search(value: string): Promise<ServiceResult<Role[]>> {
+    try {
+      const supabase = getSupabaseServerClient();
+
+      const { data, error: sbError } = await supabase
+        .from(this.collection)
+        .select("id, name, pages, permissions")
+        .ilike("name", `%${value}%`)
+        .order("name", { ascending: true })
+        .limit(10);
+
+      if (sbError) return error(sbError.message);
+      return success((data || []) as unknown as Role[]);
+    } catch (err) {
+      return error((err as Error).message || "Failed to search roles");
+    }
+  }
+
   static async valid(id: string): Promise<ServiceResult<Role>> {
     try {
       const supabase = getSupabaseServerClient();

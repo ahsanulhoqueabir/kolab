@@ -16,6 +16,8 @@ interface UserState {
   pageCache: Map<string, CachedPage<UserListItem>>;
   fullyLoadedFilters: Set<string>;
   currentFilterHash: string;
+  searchResults: UserListItem[] | null;
+  isSearching: boolean;
 }
 
 interface UserActions {
@@ -41,6 +43,8 @@ interface UserActions {
     data: UpdateUserParams,
   ) => Promise<{ success: boolean; data?: UserListItem; message?: string }>;
   deleteUser: (id: string) => Promise<{ success: boolean; message?: string }>;
+  searchUsers: (query: string) => Promise<void>;
+  clearSearch: () => void;
   clearCache: () => void;
 }
 
@@ -54,6 +58,8 @@ export const useUserStore = create<UserStore>((set, get) => ({
   pageCache: new Map(),
   fullyLoadedFilters: new Set(),
   currentFilterHash: "",
+  searchResults: null,
+  isSearching: false,
 
   fetchUsers: async (filters = {}) => {
     const page = filters.page || 1;
@@ -252,6 +258,29 @@ export const useUserStore = create<UserStore>((set, get) => ({
     }
   },
 
+  searchUsers: async (query: string) => {
+    if (!query.trim()) {
+      set({ searchResults: null, isSearching: false });
+      return;
+    }
+    set({ isSearching: true });
+    try {
+      const res = await api_client.get(
+        `/search?type=user&value=${encodeURIComponent(query.trim())}`,
+      );
+      set({
+        searchResults: (res.data?.data as UserListItem[]) ?? [],
+        isSearching: false,
+      });
+    } catch {
+      set({ searchResults: [], isSearching: false });
+    }
+  },
+
+  clearSearch: () => {
+    set({ searchResults: null, isSearching: false });
+  },
+
   clearCache: () => {
     set({
       items: [],
@@ -259,6 +288,8 @@ export const useUserStore = create<UserStore>((set, get) => ({
       pageCache: new Map(),
       fullyLoadedFilters: new Set(),
       currentFilterHash: "",
+      searchResults: null,
+      isSearching: false,
     });
   },
 }));
