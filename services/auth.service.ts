@@ -1,53 +1,27 @@
-import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
 import { signJwt } from "@/lib/api/jwt.helper";
+import { hashPassword, verifyPassword } from "@/lib/api/argon2.helper";
 import type { JwtPayload, LoginParams } from "@/types/business/user.types";
-import type { Profile } from "@/types/db/profile.types";
+import { ProfileService } from "./profile.service";
 
 export class AuthService {
   /**
-   * Creates a new user in Supabase Auth using email and password.
-   * Returns the created user on success.
+   * Creates a new user profile with hashed password.
    */
-  static async signUp(email: string, password: string) {
+  static async signUp(email: string, password: string, name: string) {
     try {
-      const supabase = getSupabaseServerClient();
-
-      const { data, error: sbError } = await supabase.auth.admin.createUser({
+      const hashedPassword = await hashPassword(password);
+      const profileResult = await ProfileService.create({
         email,
-        password,
-        email_confirm: true,
+        name,
+        password: hashedPassword,
       });
 
-      if (sbError) {
-        return error(sbError.message);
+      if (!profileResult.success) {
+        return error(profileResult.error);
       }
 
-      if (!data.user) {
-        return error("Failed to create user");
-      }
-
-      return success({ user: data.user });
-    } catch (err) {
-      return error((err as Error).message || "An unknown error occurred");
-    }
-  }
-
-  /**
-   * Delete a user from Supabase Auth by user ID.
-   * Used for cleanup when profile creation fails after user creation.
-   */
-  static async deleteUser(userId: string) {
-    try {
-      const supabase = getSupabaseServerClient();
-
-      const { error: sbError } = await supabase.auth.admin.deleteUser(userId);
-
-      if (sbError) {
-        return error(sbError.message);
-      }
-
-      return success(undefined);
+      return success({ user: profileResult.data });
     } catch (err) {
       return error((err as Error).message || "An unknown error occurred");
     }
@@ -59,41 +33,43 @@ export class AuthService {
    */
   static async login(params: LoginParams) {
     try {
-      const supabase = getSupabaseServerClient();
+      // Use ProfileService instead of querying profile table directly
+      const profileResult = await ProfileService.getByEmailWithPassword(
+        params.email,
+      );
 
-      // Sign in with email and password using the admin API
-      const { data, error: sbError } = await supabase.auth.signInWithPassword({
-        email: params.email,
-        password: params.password,
-      });
-
-      if (sbError) {
-        return error(sbError.message);
-      }
-
-      if (!data.user) {
+      if (!profileResult.success) {
         return error("Invalid email or password");
       }
 
-      // Fetch the profile linked to this user
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: profileData, error: profileError } = await (supabase as any)
-        .from("profiles")
-        .select("*")
-        .eq("user", data.user.id)
-        .single();
+      const profile = profileResult.data;
 
-      if (profileError || !profileData) {
-        return error("User profile not found");
+      if (!profile.active) {
+        return error("Account is inactive or suspended");
       }
 
-      const profile = profileData as Profile;
+      if (!profile.password) {
+        return error(
+          "Authentication failed. No password set for this account.",
+        );
+      }
+
+      // Validate password
+      const isValid = await verifyPassword(profile.password, params.password);
+      if (!isValid) {
+        return error("Invalid email or password");
+      }
 
       // Sign JWT token
+      const roleStr =
+        typeof profile.role === "string"
+          ? profile.role
+          : (profile.role as any)?.id || "";
+
       const jwtPayload: JwtPayload = {
         profile: profile.id,
         email: profile.email,
-        role: profile.role,
+        role: roleStr,
       };
 
       const token = await signJwt(jwtPayload);
@@ -104,8 +80,7 @@ export class AuthService {
           id: profile.id,
           email: profile.email,
           name: profile.name,
-          username: profile.username,
-          role: profile.role,
+          role: roleStr,
         },
       });
     } catch (err) {

@@ -1,5 +1,14 @@
 import { NextResponse } from "next/server";
 
+/** Generic shape returned by every API endpoint */
+export interface ApiResponse {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+  errorType?: string;
+  message?: string;
+}
+
 interface SuccessResponseOptions {
   data?: unknown;
   message?: string;
@@ -8,6 +17,7 @@ interface SuccessResponseOptions {
 
 interface ErrorResponseOptions {
   error: string;
+  errorType?: string;
   data?: unknown;
   statusCode?: number;
 }
@@ -34,11 +44,12 @@ export function ok(options: SuccessResponseOptions) {
  * @example fail({ error: "Not found", data: { details: "..." }, statusCode: 404 })
  */
 export function fail(options: ErrorResponseOptions) {
-  const { error, data, statusCode = 400 } = options;
+  const { error, errorType, data, statusCode = 400 } = options;
   const response: Record<string, unknown> = {
     success: false,
     error,
   };
+  if (errorType) response.errorType = errorType;
   if (data !== undefined) response.data = data;
   return NextResponse.json(response, { status: statusCode });
 }

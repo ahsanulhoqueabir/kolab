@@ -1,24 +1,75 @@
 import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
+import { hashPassword } from "@/lib/api/argon2.helper";
+import { dbTimestamp } from "@/lib/date.utils";
 import type { Profile } from "@/types/db/profile.types";
+import { RoleService } from "./role.services";
 
 export type CreateProfileParams = {
-  user: string;
   email: string;
   name: string;
-  username?: string;
+  password?: string;
+  role?: string | null;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ServiceResult<T = any> =
+type ServiceResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };
 
 export class ProfileService {
-  private static collection = "profiles";
+  private static table = "profile";
+  private static fields = {
+    basic:
+      "id, name, email, phone, image, role (id, name, permissions, pages, landing_page), active, created_at, updated_at",
+    with_permissions: "id, active, role (id, name, permissions)",
+    /** Includes password — only for auth internal use */
+    with_password: "id, name,email, password, role (id, name), active",
+  };
 
   /**
-   * Creates a new profile linked to an auth user via the `user` field (O2O relation).
+   * Fetch a profile with its role's permissions in one query.
+   * Returns failure when the profile is not found.
+   */
+  static async permissions(id: string) {
+    try {
+      const supabase = getSupabaseServerClient();
+      const { data: profile, error: sbError } = await supabase
+        .from(this.table)
+        .select(this.fields.with_permissions)
+        .eq("id", id)
+        .single();
+
+      if (sbError || !profile) {
+        return error(sbError?.message || "Profile not found");
+      }
+
+      const p = profile as unknown as {
+        active: boolean;
+        role: {
+          id: string;
+          name: string;
+          permissions: { name: string }[];
+        } | null;
+      };
+      const roleObj = p.role;
+      const permissions: string[] =
+        roleObj?.permissions?.map((p: { name: string }) => p.name) ?? [];
+
+      return success({
+        active: !!p.active,
+        roleId: roleObj?.id as string,
+        roleName: roleObj?.name as string,
+        permissions,
+      });
+    } catch (err) {
+      return error(
+        (err as Error).message || "Failed to fetch profile permissions",
+      );
+    }
+  }
+
+  /**
+   * Creates a new profile directly in the database.
    */
   static async create(
     params: CreateProfileParams,
@@ -26,24 +77,34 @@ export class ProfileService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
-        .from(this.collection)
+      // Resolve role — use RoleService instead of querying role table directly
+      let roleId: string | null = null;
+      if (params.role) {
+        roleId = params.role;
+      } else {
+        const roleResult = await RoleService.findByName("member");
+        if (roleResult.success) {
+          roleId = roleResult.data.id;
+        }
+      }
+
+      const { data, error: sbError } = await supabase
+        .from(this.table)
         .insert({
-          user: params.user,
           email: params.email,
           name: params.name,
-          username: params.username ?? null,
-          role: "user",
+          password: params.password ?? null,
+          role: roleId,
+          active: true,
         })
-        .select()
+        .select(this.fields.basic)
         .single();
 
       if (sbError) {
         return error(sbError.message);
       }
 
-      return success(data as Profile);
+      return success(data as unknown as Profile);
     } catch (err) {
       return error((err as Error).message || "An unknown error occurred");
     }
@@ -51,16 +112,15 @@ export class ProfileService {
 
   /**
    * Fetch a single profile by its primary key.
-   * Used by the `auth/me` endpoint to return the authenticated user's data.
+   * Uses the `basic` field set — password is NOT included.
    */
   static async getById(id: string): Promise<ServiceResult<Profile>> {
     try {
       const supabase = getSupabaseServerClient();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: sbError } = await (supabase as any)
-        .from(this.collection)
-        .select("*")
+      const { data, error: sbError } = await supabase
+        .from(this.table)
+        .select(this.fields.basic)
         .eq("id", id)
         .single();
 
@@ -72,9 +132,108 @@ export class ProfileService {
         return error("Profile not found");
       }
 
-      return success(data as Profile);
+      return success(data as unknown as Profile);
     } catch (err) {
       return error((err as Error).message || "An unknown error occurred");
+    }
+  }
+
+  /**
+   * Fetch a profile by email INCLUDING the password field.
+   * ONLY for internal auth use — never expose via API.
+   */
+  static async getByEmailWithPassword(
+    email: string,
+  ): Promise<ServiceResult<Profile>> {
+    try {
+      const supabase = getSupabaseServerClient();
+
+      const { data, error: sbError } = await supabase
+        .from(this.table)
+        .select(this.fields.with_password)
+        .eq("email", email)
+        .single();
+
+      if (sbError) {
+        return error(sbError.message);
+      }
+
+      if (!data) {
+        return error("Profile not found");
+      }
+
+      return success(data as unknown as Profile);
+    } catch (err) {
+      return error((err as Error).message || "An unknown error occurred");
+    }
+  }
+
+  /**
+   * Count profiles that have a specific role ID.
+   * Used by RoleService to check delete eligibility.
+   */
+  static async countByRole(roleId: string): Promise<ServiceResult<number>> {
+    try {
+      const supabase = getSupabaseServerClient();
+
+      const { count, error: sbError } = await supabase
+        .from(this.table)
+        .select("id", { count: "exact", head: true })
+        .eq("role", roleId);
+
+      if (sbError) {
+        return error(sbError.message);
+      }
+
+      return success(count || 0);
+    } catch (err) {
+      return error(
+        (err as Error).message || "Failed to count profiles by role",
+      );
+    }
+  }
+
+  /**
+   * Update a profile's allowed fields (name, phone, image, password).
+   * Password is hashed automatically.
+   * Email, role, and active cannot be changed via this method.
+   */
+  static async update(
+    id: string,
+    params: Record<string, unknown>,
+  ): Promise<ServiceResult<Profile>> {
+    try {
+      const supabase = getSupabaseServerClient();
+      const updateData: Record<string, unknown> = {};
+
+      const allowedFields = ["name", "phone", "image", "password"];
+      for (const field of allowedFields) {
+        if (params[field] !== undefined) {
+          updateData[field] = params[field];
+        }
+      }
+
+      // Hash password if provided
+      if (updateData.password) {
+        updateData.password = await hashPassword(updateData.password as string);
+      }
+
+      updateData.updated_at = dbTimestamp();
+
+      const { data, error: sbError } = await supabase
+        .from(this.table)
+        .update(updateData)
+        .eq("id", id)
+        .select(this.fields.basic)
+        .single();
+
+      if (sbError || !data) {
+        return error(sbError?.message || "Failed to update profile");
+      }
+
+      return success(data as unknown as Profile);
+    } catch (err) {
+      return error((err as Error).message || "Failed to update profile");
     }
   }
 }

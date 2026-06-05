@@ -13,22 +13,23 @@ export interface SignUpParams {
   email: string;
   password: string;
   name: string;
-  username?: string;
 }
 
 export interface AuthUser {
   id: string;
   email: string;
   name: string;
-  username: string | null;
+  phone?: string | null;
+  image?: string | null;
   role: string;
+  permissions?: string[];
+  pages?: string[];
 }
 
 export interface Profile {
   id: string;
   email: string;
   name: string;
-  username: string | null;
   role: string;
 }
 

@@ -22,7 +22,8 @@ const createApiClient = (): AxiosInstance => {
       const isPublic = config.url?.startsWith("/auth/") ?? false;
 
       if (!isPublic) {
-        const isAuthenticated = selectIsAuthenticated(useAuthStore.getState());
+        const state = useAuthStore.getState();
+        const isAuthenticated = selectIsAuthenticated(state);
 
         if (!isAuthenticated) {
           return Promise.reject(
@@ -50,10 +51,28 @@ const createApiClient = (): AxiosInstance => {
         _retry?: boolean;
       };
 
+      // ── NEVER retry /auth/me — it's called by initAuth() which
+      //    already handles clearing invalid tokens. Retrying here
+      //    would cause an infinite loop. ──────────────────────────
+      const isAuthMe = original_request?.url === "/auth/me";
+
       // Handle authorization errors (401, 403)
       if (error.response?.status === 401 || error.response?.status === 403) {
+        // Check for PROFILE_INACTIVE — logout immediately, don't redirect to unauthorized
+        const errorType = (error.response?.data as { errorType?: string })
+          ?.errorType;
+        if (errorType === "PROFILE_INACTIVE") {
+          useAuthStore.getState().logout();
+          return Promise.reject(error);
+        }
+
         // If error is 401 and we haven't retried yet, try token refresh
-        if (error.response?.status === 401 && !original_request?._retry) {
+        // BUT skip retry for /auth/me to avoid infinite loops
+        if (
+          error.response?.status === 401 &&
+          !original_request?._retry &&
+          !isAuthMe
+        ) {
           if (original_request) {
             original_request._retry = true;
           }
@@ -68,7 +87,7 @@ const createApiClient = (): AxiosInstance => {
             // If we still don't have a token after refresh attempt, handle auth error
             if (!accessToken) {
               ServerNavigationHelper.handleAuthError(error);
-              return Promise.reject(new Error("Authentication failed"));
+              return Promise.reject(error);
             }
 
             // Retry the original request with new token
@@ -85,7 +104,7 @@ const createApiClient = (): AxiosInstance => {
             return Promise.reject(refresh_error);
           }
         } else {
-          // For 403 or already retried 401, handle auth error immediately
+          // For 403, /auth/me 401, or already retried 401, handle auth error immediately
           ServerNavigationHelper.handleAuthError(error);
           return Promise.reject(error);
         }
