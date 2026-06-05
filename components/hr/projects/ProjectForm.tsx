@@ -6,13 +6,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { Card, CardContent } from "@/components/core/ui/card";
 import { Input } from "@/components/core/ui/input";
 import { Label } from "@/components/core/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/core/ui/select";
+import { SearchComboBox } from "@/components/core/shared/SearchComboBox";
 import { DatePicker } from "@/components/core/ui/date-picker";
 import { FileUpload } from "@/components/core/shared/FileUpload";
 import { CreatePageHeader } from "@/components/core/shared/CreatePageHeader";
@@ -182,24 +176,20 @@ export function ProjectForm({
 
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
-                <Select
+                <SearchComboBox
+                  options={PROJECT_STATUS_OPTIONS.map((opt) => ({
+                    value: opt.value,
+                    label: opt.label,
+                  }))}
                   value={selectedStatus || "DRAFT"}
                   onValueChange={(value) =>
                     setValue("status", value as ProjectStatus)
                   }
+                  placeholder="Select status"
+                  searchPlaceholder="Search status..."
+                  emptyMessage="No status options found."
                   disabled={isSubmitting}
-                >
-                  <SelectTrigger id="status" className="h-9">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROJECT_STATUS_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
 
               <div className="space-y-2">

@@ -1,25 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { UserPlus } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/core/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/core/ui/select";
+import { useState, useEffect, useMemo } from "react";
+import { UserPlus, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Label } from "@/components/core/ui/label";
 import { Button } from "@/components/ui/button";
 import { useUserStore } from "@/store/user.store";
+import { SearchComboBox } from "@/components/core/shared/SearchComboBox";
 
 interface AddMemberDialogProps {
   projectId: string;
@@ -30,17 +17,19 @@ interface AddMemberDialogProps {
 }
 
 export function AddMemberDialog({
-  projectId,
   onAdd,
   disabled,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: AddMemberDialogProps) {
-  const { users, fetchUsers } = useUserStore();
+  const { items: users, fetchUsers } = useUserStore();
   const [internalOpen, setInternalOpen] = useState(false);
 
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
-  const setOpen = controlledOnOpenChange !== undefined ? controlledOnOpenChange : setInternalOpen;
+  const setOpen =
+    controlledOnOpenChange !== undefined
+      ? controlledOnOpenChange
+      : setInternalOpen;
 
   const [selectedUser, setSelectedUser] = useState("");
   const [selectedRole, setSelectedRole] = useState<"MEMBER" | "MANAGER">(
@@ -61,8 +50,21 @@ export function AddMemberDialog({
     setSelectedRole("MEMBER");
   };
 
+  const memberOptions = useMemo(() => {
+    return (users || []).map((u) => ({
+      value: u.id,
+      label: `${u.name} (${u.email})`,
+    }));
+  }, [users]);
+
+  const roleOptions = [
+    { value: "MEMBER", label: "Member" },
+    { value: "MANAGER", label: "Manager" },
+  ];
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <>
+      {/* Trigger Button */}
       <Button
         variant="default"
         size="sm"
@@ -72,51 +74,78 @@ export function AddMemberDialog({
         <UserPlus className="h-4 w-4 mr-1.5" />
         Add Member
       </Button>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add Team Member</DialogTitle>
-          <DialogDescription>
-            Add a user to this project team.
-          </DialogDescription>
-        </DialogHeader>
 
-        <div className="space-y-4 py-4">
+      {/* Sliding Panel Backdrop */}
+      <div
+        className={cn(
+          "fixed inset-0 z-50 bg-black/60 backdrop-blur-xs transition-opacity duration-300 pointer-events-none",
+          open ? "opacity-100 pointer-events-auto" : "opacity-0",
+        )}
+        onClick={() => setOpen(false)}
+      />
+
+      {/* Sliding Panel Sheet */}
+      <div
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 w-full sm:max-w-md bg-background border-l shadow-2xl p-6 flex flex-col gap-6 transition-transform duration-300 ease-in-out transform pointer-events-auto",
+          open ? "translate-x-0" : "translate-x-full",
+        )}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b pb-4">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-primary" />
+              Add Team Member
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Add a user to this project team to collaborate.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="rounded-full p-1.5 hover:bg-muted text-muted-foreground transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Form Content */}
+        <div className="flex-1 space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="member">Select Member</Label>
-            <Select value={selectedUser} onValueChange={setSelectedUser}>
-              <SelectTrigger id="member" className="h-9">
-                <SelectValue placeholder="Choose a user" />
-              </SelectTrigger>
-              <SelectContent>
-                {users.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {u.name} ({u.email})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="member" className="text-sm font-medium">
+              Select Member
+            </Label>
+            <SearchComboBox
+              options={memberOptions}
+              value={selectedUser}
+              onValueChange={setSelectedUser}
+              placeholder="Choose a user"
+              searchPlaceholder="Search users..."
+              emptyMessage="No users found."
+            />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="role">Role</Label>
-            <Select
+            <Label htmlFor="role" className="text-sm font-medium">
+              Role
+            </Label>
+            <SearchComboBox
+              options={roleOptions}
               value={selectedRole}
               onValueChange={(value) =>
                 setSelectedRole(value as "MEMBER" | "MANAGER")
               }
-            >
-              <SelectTrigger id="role" className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="MEMBER">Member</SelectItem>
-                <SelectItem value="MANAGER">Manager</SelectItem>
-              </SelectContent>
-            </Select>
+              placeholder="Select role"
+              searchPlaceholder="Search roles..."
+              emptyMessage="No roles found."
+            />
           </div>
         </div>
 
-        <DialogFooter>
+        {/* Footer Actions */}
+        <div className="border-t pt-4 flex items-center gap-3 justify-end">
           <Button
             type="button"
             variant="outline"
@@ -127,8 +156,8 @@ export function AddMemberDialog({
           <Button type="button" onClick={handleAdd} disabled={!selectedUser}>
             Add to Team
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </>
   );
 }

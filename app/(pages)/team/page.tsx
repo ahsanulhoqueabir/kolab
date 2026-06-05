@@ -14,13 +14,7 @@ import { useTeamStore } from "@/store/team.store";
 import { useProjectStore } from "@/store/project.store";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { ListPageHeader } from "@/components/core/shared/ListPageHeader";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/core/ui/select";
+import { SearchComboBox } from "@/components/core/shared/SearchComboBox";
 
 function TeamPageContent() {
   const searchParams = useSearchParams();
@@ -142,21 +136,14 @@ function TeamPageContent() {
       {/* Project selector */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="w-64">
-          <Select
+          <SearchComboBox
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
             value={selectedProjectId}
             onValueChange={setSelectedProjectId}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Select a project" />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            placeholder="Select a project"
+            searchPlaceholder="Search projects..."
+            emptyMessage="No projects found."
+          />
         </div>
 
         {selectedProjectId && (

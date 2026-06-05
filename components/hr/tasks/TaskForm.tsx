@@ -1,20 +1,18 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
+import { Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/core/ui/card";
 import { Input } from "@/components/core/ui/input";
 import { Label } from "@/components/core/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/core/ui/select";
+import { Button } from "@/components/ui/button";
 import { CreatePageHeader } from "@/components/core/shared/CreatePageHeader";
 import { useReturnUrl } from "@/hooks/use-return-url";
+import { SearchComboBox } from "@/components/core/shared/SearchComboBox";
+import { DatePicker } from "@/components/core/ui/date-picker";
+import { useAuthStore } from "@/store/auth.store";
 import {
   TASK_DEFAULT_VALUES,
   PRIORITY_OPTIONS,
@@ -50,6 +48,10 @@ export function TaskForm({
   const { returnTo } = useReturnUrl("/tasks");
   const isEdit = mode === "edit";
 
+  const { permissions } = useAuthStore();
+  const canCreateProject = permissions.includes("project:create");
+  const canCreateUser = permissions.includes("user:create");
+
   const {
     register,
     handleSubmit,
@@ -66,6 +68,35 @@ export function TaskForm({
   const selectedStatus = useWatch({ control, name: "status" });
   const selectedAssignee = useWatch({ control, name: "assigned_to" });
   const canSubmit = !!(formTitle && selectedProject);
+
+  const projectOptions = useMemo(() => {
+    return (projects || []).map((p) => ({ value: p.id, label: p.name }));
+  }, [projects]);
+
+  const userOptions = useMemo(() => {
+    return (users || []).map((u) => ({ value: u.id, label: u.name }));
+  }, [users]);
+
+  const priorityOptions = useMemo(() => {
+    return PRIORITY_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }));
+  }, []);
+
+  const statusOptions = useMemo(() => {
+    return STATUS_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }));
+  }, []);
+
+  const dueDateValue = useWatch({ control, name: "due_date" });
+  const dueDate = useMemo(() => {
+    if (!dueDateValue) return undefined;
+    const d = new Date(dueDateValue);
+    return isNaN(d.getTime()) ? undefined : d;
+  }, [dueDateValue]);
+
+  const handleDueDateChange = (date: Date | undefined) => {
+    setValue("due_date", date ? date.toISOString().split("T")[0] : "", {
+      shouldDirty: true,
+    });
+  };
 
   useEffect(() => {
     if (initialData) {
@@ -161,97 +192,113 @@ export function TaskForm({
                 <Label htmlFor="project">
                   Project <span className="text-red-500 ml-1">*</span>
                 </Label>
-                <Select
-                  value={selectedProject || ""}
-                  onValueChange={(value) => setValue("project", value)}
-                  disabled={isSubmitting}
-                >
-                  <SelectTrigger id="project" className="h-9">
-                    <SelectValue placeholder="Select a project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <SearchComboBox
+                      options={projectOptions}
+                      value={selectedProject || ""}
+                      onValueChange={(value) => setValue("project", value)}
+                      placeholder="Select a project"
+                      searchPlaceholder="Search projects..."
+                      emptyMessage="No projects found."
+                      disabled={isSubmitting}
+                      showCreate={canCreateProject}
+                      createLabel="Create new project"
+                      onCreateNew={() => router.push("/projects/create")}
+                    />
+                  </div>
+                  {canCreateProject && (
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      onClick={() => router.push("/projects/create")}
+                      title="Create new project"
+                      disabled={isSubmitting}
+                      className="shrink-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="assigned_to">Assign To</Label>
-                <Select
-                  value={selectedAssignee || ""}
-                  onValueChange={(value) => setValue("assigned_to", value)}
-                  disabled={isSubmitting}
-                >
-                  <SelectTrigger id="assigned_to" className="h-9">
-                    <SelectValue placeholder="Select a member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <SearchComboBox
+                      options={userOptions}
+                      value={selectedAssignee || ""}
+                      onValueChange={(value) => setValue("assigned_to", value)}
+                      placeholder="Select a member"
+                      searchPlaceholder="Search members..."
+                      emptyMessage="No members found."
+                      disabled={isSubmitting}
+                      showCreate={canCreateUser}
+                      createLabel="Create new user"
+                      onCreateNew={() => router.push("/users/create")}
+                    />
+                  </div>
+                  {canCreateUser && (
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      onClick={() => router.push("/users/create")}
+                      title="Create new user"
+                      disabled={isSubmitting}
+                      className="shrink-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="priority">Priority</Label>
-                <Select
+                <SearchComboBox
+                  options={priorityOptions}
                   value={selectedPriority || "MEDIUM"}
                   onValueChange={(value) =>
                     setValue("priority", value as TaskPriority)
                   }
+                  placeholder="Select priority"
+                  searchPlaceholder="Search priority..."
+                  emptyMessage="No priority options."
                   disabled={isSubmitting}
-                >
-                  <SelectTrigger id="priority" className="h-9">
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PRIORITY_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="due_date">Due Date</Label>
-                <Input
+                <DatePicker
                   id="due_date"
-                  type="date"
-                  {...register("due_date")}
+                  date={dueDate}
+                  onDateChange={handleDueDateChange}
+                  placeholder="Select due date"
                   disabled={isSubmitting}
+                  disablePastDates
+                  yearRange={{
+                    from: new Date().getFullYear(),
+                    to: new Date().getFullYear() + 5,
+                  }}
                 />
               </div>
 
               {isEdit && (
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
-                  <Select
+                  <SearchComboBox
+                    options={statusOptions}
                     value={selectedStatus || "TODO"}
                     onValueChange={(value) =>
                       setValue("status", value as TaskStatus)
                     }
+                    placeholder="Select status"
+                    searchPlaceholder="Search status..."
+                    emptyMessage="No status options."
                     disabled={isSubmitting}
-                  >
-                    <SelectTrigger id="status" className="h-9">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUS_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
               )}
             </div>

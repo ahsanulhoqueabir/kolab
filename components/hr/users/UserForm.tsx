@@ -7,7 +7,6 @@ import { Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/core/ui/card";
 import { Input } from "@/components/core/ui/input";
 import { Label } from "@/components/core/ui/label";
-import { Badge } from "@/components/core/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreatePageHeader } from "@/components/core/shared/CreatePageHeader";
 import { SearchComboBox } from "@/components/core/shared/SearchComboBox";
@@ -159,210 +158,283 @@ export function UserForm({
         onSubmit={handleSubmit(handleFormSubmit)}
         className="space-y-6 mb-10"
       >
-        <Card>
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Name */}
-              <div className="space-y-2">
-                <Label htmlFor="name">
-                  Name <span className="text-red-500 ml-1">*</span>
-                </Label>
-                <Input
-                  id="name"
-                  {...register("name", PROFILE_VALIDATION_RULES.name)}
-                  placeholder="Enter full name"
-                  className={errors.name ? "border-destructive" : ""}
-                  disabled={isSubmitting}
-                />
-                {errors.name && (
-                  <p className="text-sm text-destructive">
-                    {errors.name.message}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: Basic Information */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <CardContent className="pt-6 space-y-4">
+                <div className="border-b pb-3 mb-4">
+                  <h3 className="text-base font-semibold text-foreground">
+                    Basic Information
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    General identity and system role configuration.
                   </p>
-                )}
-              </div>
+                </div>
 
-              {/* Email */}
-              <div className="space-y-2">
-                <Label htmlFor="email">
-                  Email <span className="text-red-500 ml-1">*</span>
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  {...register("email", PROFILE_VALIDATION_RULES.email)}
-                  placeholder="Enter email address"
-                  className={errors.email ? "border-destructive" : ""}
-                  disabled={isSubmitting}
-                />
-                {errors.email && (
-                  <p className="text-sm text-destructive">
-                    {errors.email.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Role with search combobox + create button */}
-              <div className="space-y-2">
-                <Label htmlFor="role">
-                  Role {!isEdit && <span className="text-red-500 ml-1">*</span>}
-                </Label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <SearchComboBox
-                      options={roleOptions}
-                      value={selectedRole || ""}
-                      onValueChange={(value) => setValue("role", value)}
-                      placeholder="Select a role"
-                      searchPlaceholder="Search roles..."
-                      emptyMessage="No roles found."
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Name */}
+                  <div className="space-y-2">
+                    <Label htmlFor="name">
+                      Name <span className="text-red-500 ml-1">*</span>
+                    </Label>
+                    <Input
+                      id="name"
+                      {...register("name", PROFILE_VALIDATION_RULES.name)}
+                      placeholder="Enter full name"
+                      className={errors.name ? "border-destructive" : ""}
                       disabled={isSubmitting}
-                      showCreate={canCreateRole}
-                      createLabel="Create new role"
-                      onCreateNew={() => router.push("/role-management/+")}
                     />
+                    {errors.name && (
+                      <p className="text-sm text-destructive">
+                        {errors.name.message}
+                      </p>
+                    )}
                   </div>
-                  {canCreateRole && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={() => router.push("/role-management/+")}
-                      title="Create new role"
+
+                  {/* Email */}
+                  <div className="space-y-2">
+                    <Label htmlFor="email">
+                      Email <span className="text-red-500 ml-1">*</span>
+                    </Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      {...register("email", PROFILE_VALIDATION_RULES.email)}
+                      placeholder="Enter email address"
+                      className={errors.email ? "border-destructive" : ""}
                       disabled={isSubmitting}
-                      className="shrink-0"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Account Status (edit mode only) */}
-              {isEdit && (
-                <div className="space-y-2">
-                  <Label htmlFor="active">Account Status</Label>
-                  <div className="flex items-center gap-3 pt-1">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        {...register("active")}
-                        className="rounded border-gray-300 focus:ring-primary h-4 w-4 text-primary"
-                        disabled={isSubmitting}
-                      />
-                      <span className="text-sm">
-                        {isActive ? (
-                          <Badge variant="default">Active</Badge>
-                        ) : (
-                          <Badge variant="secondary">Inactive</Badge>
-                        )}
-                      </span>
-                    </label>
+                    />
+                    {errors.email && (
+                      <p className="text-sm text-destructive">
+                        {errors.email.message}
+                      </p>
+                    )}
                   </div>
                 </div>
-              )}
 
-              {/* Password */}
-              <div
-                className={cn(
-                  "space-y-2",
-                  isEdit ? "md:col-span-2" : "md:col-span-2",
-                )}
-              >
-                <Label htmlFor="password">
-                  {isEdit ? "Reset Password" : "Password"}
-                  {!isEdit && <span className="text-red-500 ml-1">*</span>}
-                </Label>
-                {isEdit ? (
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={resetPassword}
-                        onChange={(e) => {
-                          setResetPassword(e.target.checked);
-                          if (!e.target.checked) {
-                            setValue("password", "");
-                            setValue("confirmPassword", "");
-                          }
-                        }}
-                        className="rounded border-gray-300 focus:ring-primary h-4 w-4 text-primary"
+                {/* Role with search combobox + create button */}
+                <div className="space-y-2">
+                  <Label htmlFor="role">
+                    Role{" "}
+                    {!isEdit && <span className="text-red-500 ml-1">*</span>}
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <SearchComboBox
+                        options={roleOptions}
+                        value={selectedRole || ""}
+                        onValueChange={(value) => setValue("role", value)}
+                        placeholder="Select a role"
+                        searchPlaceholder="Search roles..."
+                        emptyMessage="No roles found."
                         disabled={isSubmitting}
+                        showCreate={canCreateRole}
+                        createLabel="Create new role"
+                        onCreateNew={() => router.push("/role-management/+")}
                       />
-                      <span className="text-sm text-muted-foreground">
-                        Check to set a new password
-                      </span>
-                    </label>
-                    {resetPassword && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Input
-                            id="password"
-                            type="password"
-                            {...register(
-                              "password",
-                              PROFILE_VALIDATION_RULES.password,
-                            )}
-                            placeholder="Enter new password"
-                            className={
-                              errors.password ? "border-destructive" : ""
-                            }
-                            disabled={isSubmitting}
-                          />
-                          {errors.password && (
-                            <p className="text-sm text-destructive">
-                              {errors.password.message}
-                            </p>
-                          )}
+                    </div>
+                    {canCreateRole && (
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        onClick={() => router.push("/role-management/+")}
+                        title="Create new role"
+                        disabled={isSubmitting}
+                        className="shrink-0"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Column: Account & Security Settings */}
+          <div className="space-y-6">
+            <Card>
+              <CardContent className="space-y-3">
+                <div className="border-b pb-3">
+                  <h3 className="text-base font-semibold text-foreground">
+                    Account & Security
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Manage account access status and credentials.
+                  </p>
+                </div>
+
+                {/* Account Status (edit mode only) */}
+                {isEdit && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-semibold">
+                      Account Status
+                    </Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Active Card */}
+                      <div
+                        onClick={() =>
+                          !isSubmitting && setValue("active", true)
+                        }
+                        className={cn(
+                          "flex items-center justify-between p-3.5 rounded-lg border cursor-pointer transition-all duration-200 select-none",
+                          isActive
+                            ? "border-primary bg-primary/5 shadow-xs"
+                            : "border-border hover:border-muted-foreground/30",
+                        )}
+                      >
+                        <div className="space-y-0.5">
+                          <span className="text-sm font-medium">Active</span>
                         </div>
-                        <div className="space-y-2">
-                          <Input
-                            id="confirmPassword"
-                            type="password"
-                            {...register("confirmPassword", {
-                              validate: (value) =>
-                                !resetPassword ||
-                                value === getValues("password") ||
-                                "Passwords do not match",
-                            })}
-                            placeholder="Confirm new password"
-                            className={
-                              errors.confirmPassword ? "border-destructive" : ""
-                            }
-                            disabled={isSubmitting}
-                          />
-                          {errors.confirmPassword && (
-                            <p className="text-sm text-destructive">
-                              {errors.confirmPassword.message}
-                            </p>
+                        <div
+                          className={cn(
+                            "h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                            isActive
+                              ? "border-primary bg-primary"
+                              : "border-muted-foreground",
+                          )}
+                        >
+                          {isActive && (
+                            <div className="h-1.5 w-1.5 rounded-full bg-background" />
                           )}
                         </div>
                       </div>
-                    )}
+
+                      {/* Inactive Card */}
+                      <div
+                        onClick={() =>
+                          !isSubmitting && setValue("active", false)
+                        }
+                        className={cn(
+                          "flex items-center justify-between p-3.5 rounded-lg border cursor-pointer transition-all duration-200 select-none",
+                          !isActive
+                            ? "border-primary bg-primary/5 shadow-xs"
+                            : "border-border hover:border-muted-foreground/30",
+                        )}
+                      >
+                        <div className="space-y-0.5">
+                          <span className="text-sm font-medium">Inactive</span>
+                        </div>
+                        <div
+                          className={cn(
+                            "h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                            !isActive
+                              ? "border-primary bg-primary"
+                              : "border-muted-foreground",
+                          )}
+                        >
+                          {!isActive && (
+                            <div className="h-1.5 w-1.5 rounded-full bg-background" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <>
-                    <Input
-                      id="password"
-                      type="password"
-                      {...register(
-                        "password",
-                        PROFILE_VALIDATION_RULES.password,
-                      )}
-                      placeholder="Enter password"
-                      className={errors.password ? "border-destructive" : ""}
-                      disabled={isSubmitting}
-                    />
-                    {errors.password && (
-                      <p className="text-sm text-destructive">
-                        {errors.password.message}
-                      </p>
-                    )}
-                  </>
                 )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+
+                {/* Password */}
+                <div className="space-y-3 pt-3 border-t">
+                  <Label htmlFor="password" className="text-sm font-semibold">
+                    {isEdit ? "Password Update" : "Password Configuration"}
+                    {!isEdit && <span className="text-red-500 ml-1">*</span>}
+                  </Label>
+
+                  {isEdit ? (
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={resetPassword}
+                          onChange={(e) => {
+                            setResetPassword(e.target.checked);
+                            if (!e.target.checked) {
+                              setValue("password", "");
+                              setValue("confirmPassword", "");
+                            }
+                          }}
+                          className="rounded border-gray-300 focus:ring-primary h-4 w-4 text-primary"
+                          disabled={isSubmitting}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          Check to change user password
+                        </span>
+                      </label>
+
+                      {resetPassword && (
+                        <div className="space-y-3 animate-in fade-in-50 duration-200">
+                          <div className="space-y-2">
+                            <Input
+                              id="password"
+                              type="password"
+                              {...register(
+                                "password",
+                                PROFILE_VALIDATION_RULES.password,
+                              )}
+                              placeholder="Enter new password"
+                              className={
+                                errors.password ? "border-destructive" : ""
+                              }
+                              disabled={isSubmitting}
+                            />
+                            {errors.password && (
+                              <p className="text-sm text-destructive">
+                                {errors.password.message}
+                              </p>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <Input
+                              id="confirmPassword"
+                              type="password"
+                              {...register("confirmPassword", {
+                                validate: (value) =>
+                                  !resetPassword ||
+                                  value === getValues("password") ||
+                                  "Passwords do not match",
+                              })}
+                              placeholder="Confirm new password"
+                              className={
+                                errors.confirmPassword
+                                  ? "border-destructive"
+                                  : ""
+                              }
+                              disabled={isSubmitting}
+                            />
+                            {errors.confirmPassword && (
+                              <p className="text-sm text-destructive">
+                                {errors.confirmPassword.message}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Input
+                        id="password"
+                        type="password"
+                        {...register(
+                          "password",
+                          PROFILE_VALIDATION_RULES.password,
+                        )}
+                        placeholder="Enter password"
+                        className={errors.password ? "border-destructive" : ""}
+                        disabled={isSubmitting}
+                      />
+                      {errors.password && (
+                        <p className="text-sm text-destructive">
+                          {errors.password.message}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </form>
     </div>
   );
