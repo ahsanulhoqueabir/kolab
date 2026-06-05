@@ -11,7 +11,8 @@ import { Badge } from "@/components/core/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreatePageHeader } from "@/components/core/shared/CreatePageHeader";
 import { SearchComboBox } from "@/components/core/shared/SearchComboBox";
-import { useRoleStore, type RoleRes } from "@/store/role.store";
+import { useRoleStore } from "@/store/role.store";
+import type { RoleRes } from "@/types/db/role.types";
 import { useAuthStore } from "@/store/auth.store";
 import { useReturnUrl } from "@/hooks/use-return-url";
 import type { ProfileFormData } from "@/types/db/profile.types";
@@ -37,7 +38,7 @@ export function UserForm({
   onSubmit,
 }: UserFormProps) {
   const router = useRouter();
-  const { roles, fetchRoles } = useRoleStore();
+  const { items: roles, fetchRoles } = useRoleStore();
   const { permissions } = useAuthStore();
   const { returnTo } = useReturnUrl("/users");
   const [resetPassword, setResetPassword] = useState(false);

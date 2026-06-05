@@ -198,6 +198,7 @@ function EditRolePageContent() {
 
   return (
     <RoleForm
+      key={roleId}
       mode="edit"
       initialData={initialData}
       isSubmitting={isSubmitting}

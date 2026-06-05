@@ -8,7 +8,8 @@ export interface Role {
   updated_at?: string;
 }
 
-export interface RoleRes extends Omit<Role, "permissions" | "pages"> {
+export interface RoleRes extends Role {
+  // Alias fields for API response compatibility
   permission?: { name: string }[] | null;
   page?: { url: string }[] | null;
 }

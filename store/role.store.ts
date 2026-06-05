@@ -1,16 +1,24 @@
 import { api_client } from "@/lib/api/api-client";
 import { hashFilters, dedupeById } from "@/lib/pagination";
 import type { PaginationMeta, PaginatedData, CachedPage } from "@/types/types";
+import type { RoleRes } from "@/types/db/role.types";
 import { create } from "zustand";
 
-export interface RoleRes {
-  id: string;
-  name: string;
-  landing_page?: string | null;
-  permission?: { name: string }[] | null;
-  page?: { url: string }[] | null;
-  created_at?: string;
-  updated_at?: string;
+/** Normalize a role item to ensure both plural (DB) and singular (API) field names work */
+function normalizeRole(item: RoleRes): RoleRes {
+  const normalized = { ...item };
+  // DB returns "permissions" (plural), frontend expects "permission" (singular)
+  const itemAny = item as unknown as Record<string, unknown>;
+  if (itemAny.permissions && !normalized.permission) {
+    normalized.permission = itemAny.permissions as { name: string }[];
+  }
+  if (itemAny.pages && !normalized.page) {
+    normalized.page = itemAny.pages as { url: string }[];
+  }
+  // Ensure singular fields exist even if empty
+  if (!normalized.permission) normalized.permission = [];
+  if (!normalized.page) normalized.page = [];
+  return normalized;
 }
 
 interface RoleState {
@@ -197,7 +205,8 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
         return;
       }
 
-      const { items: newItems, pagination: paginationMeta } = responseData;
+      const { items: rawItems, pagination: paginationMeta } = responseData;
+      const newItems = rawItems.map((item) => normalizeRole(item));
 
       const newPageCache = new Map(state.pageCache);
       newPageCache.set(cacheKey, {
@@ -363,7 +372,15 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
   getRoleById: async (id: string) => {
     try {
       const res = await api_client.get(`/roles/${id}`);
-      return { success: true, data: res.data?.data }; // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawData = res.data?.data as Record<string, unknown> | undefined;
+      if (rawData) {
+        // The API returns { role: { ... } } structure
+        const roleData = (rawData.role || rawData) as RoleRes;
+        const normalized = normalizeRole(roleData);
+        return { success: true, data: normalized };
+      }
+      return { success: false, message: "Role not found" };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.response) {
         return {
@@ -408,7 +425,7 @@ export const useRoleStore = create<RoleStore>((set, get) => ({
 
   updateRole: async (roleData) => {
     try {
-      const res = await api_client.put(`/roles/${roleData.id}`, roleData);
+      const res = await api_client.patch(`/roles`, roleData);
       return { success: true, data: res.data?.data };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {

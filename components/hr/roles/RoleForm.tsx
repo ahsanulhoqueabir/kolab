@@ -68,12 +68,12 @@ export function RoleForm({
   const { returnTo } = useReturnUrl("/role-management");
   const isEdit = mode === "edit";
 
-  const initialPermissions = initialData?.permissions ?? [];
-  const initialPages = initialData?.pages ?? [];
-
-  const [selectedPermissions, setSelectedPermissions] =
-    useState<string[]>(initialPermissions);
-  const [selectedPages, setSelectedPages] = useState<string[]>(initialPages);
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>(
+    () => initialData?.permissions ?? [],
+  );
+  const [selectedPages, setSelectedPages] = useState<string[]>(
+    () => initialData?.pages ?? [],
+  );
 
   const {
     register,
@@ -82,7 +82,9 @@ export function RoleForm({
     control,
     formState: { errors },
   } = useForm<CreateRoleParams>({
-    defaultValues: ROLE_DEFAULT_VALUES,
+    defaultValues: initialData
+      ? { name: initialData.name, landing_page: initialData.landing_page || "" }
+      : ROLE_DEFAULT_VALUES,
   });
 
   const landingPage = useWatch({ control, name: "landing_page" });
@@ -96,13 +98,6 @@ export function RoleForm({
     selectedPermissionsRef.current = selectedPermissions;
     selectedPagesRef.current = selectedPages;
   }, [selectedPermissions, selectedPages]);
-
-  useEffect(() => {
-    if (initialData) {
-      setValue("name", initialData.name);
-      setValue("landing_page", initialData.landing_page || "");
-    }
-  }, [initialData, setValue]);
 
   const handlePermissionUnselectBlocked = useCallback(
     (blocked: { permission: string; requiredByPages: string[] }[]) => {
