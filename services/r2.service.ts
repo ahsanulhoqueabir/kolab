@@ -16,6 +16,22 @@ import type {
   ListFilesResult,
   FileObject,
 } from "@/types/business/file.types";
+
+// ─── Types for signed-upload flow ────────────────────────────────────────
+
+export interface SignedUploadRequest {
+  fileName: string;
+  contentType: string;
+}
+
+export interface SignedUploadResult {
+  /** The R2 object key */
+  key: string;
+  /** Pre-signed PutObject URL (30-min expiry) */
+  signedUrl: string;
+  /** Public URL after upload completes */
+  publicUrl: string;
+}
 import { r2 } from "@/config/env.config";
 
 export class FileService {
@@ -38,6 +54,7 @@ export class FileService {
     this.s3Client = new S3Client({
       region: "auto",
       endpoint: `https://${r2.id}.r2.cloudflarestorage.com`,
+      // endpoint: `${this.publicUrl}`,
       credentials: {
         accessKeyId: r2.key,
         secretAccessKey: r2.secret,
@@ -149,6 +166,59 @@ export class FileService {
     });
 
     return signedUrl;
+  }
+
+  /**
+   * Generate a pre-signed PutObject URL so the client can upload directly to R2.
+   * The URL is valid for `expiresIn` seconds (default 1800 = 30 min).
+   */
+  async generateSignedUploadUrl(
+    fileName: string,
+    contentType: string,
+    folder = "",
+    expiresIn = 1800,
+  ): Promise<SignedUploadResult> {
+    const timestamp = Date.now();
+    const sanitized = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const key = folder
+      ? `${folder.replace(/^\/|\/$/g, "")}/${timestamp}_${sanitized}`
+      : `${timestamp}_${sanitized}`;
+
+    const command = new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+      ContentType: contentType,
+    });
+
+    const signedUrl = await getSignedUrl(this.s3Client, command, {
+      expiresIn,
+    });
+
+    const publicUrl = this.publicUrl
+      ? `${this.publicUrl}/${key}`
+      : `https://${this.bucketName}.r2.cloudflarestorage.com/${key}`;
+
+    return { key, signedUrl, publicUrl };
+  }
+
+  /**
+   * Generate signed upload URLs for multiple files at once.
+   */
+  async generateSignedUploadUrls(
+    files: SignedUploadRequest[],
+    folder = "",
+    expiresIn = 1800,
+  ): Promise<SignedUploadResult[]> {
+    return Promise.all(
+      files.map((f) =>
+        this.generateSignedUploadUrl(
+          f.fileName,
+          f.contentType,
+          folder,
+          expiresIn,
+        ),
+      ),
+    );
   }
 
   /**
@@ -352,5 +422,17 @@ export class R2Service {
     folder: string,
   ): Promise<string[]> {
     return processAttachments(attachments, folder);
+  }
+
+  /**
+   * Generate pre-signed PutObject URLs for client-side direct upload.
+   * Each result contains `signedUrl`, `publicUrl`, and `key`.
+   */
+  static async generateSignedUploadUrls(
+    files: SignedUploadRequest[],
+    folder = "",
+    expiresIn = 1800,
+  ): Promise<SignedUploadResult[]> {
+    return fileService.generateSignedUploadUrls(files, folder, expiresIn);
   }
 }

@@ -1,5 +1,4 @@
 import { ProjectService } from "@/services/project.service";
-import { R2Service } from "@/services/r2.service";
 import { withAuth } from "@/lib/api/auth-middleware";
 import { ok, fail } from "@/lib/api/api-response";
 import type { CreateProjectParams } from "@/types/db/project.types";
@@ -53,18 +52,10 @@ export const POST = withAuth({ permissions: "project:create" })(async ({
       return fail({ error: "PROJECT_CREATE_BAD_REQUEST" });
     }
 
-    // ── Attachment handling: base64 → R2 at route level ────────
-    let processedAttachments: string[] | undefined;
-    if (body.attachment && body.attachment.length > 0) {
-      processedAttachments = await R2Service.processAttachments(
-        body.attachment,
-        "projects",
-      );
-    }
-
+    // Attachments are already public URLs (client uploads directly to R2)
     const result = await ProjectService.create({
       ...body,
-      attachment: processedAttachments,
+      attachment: body.attachment?.length ? body.attachment : undefined,
       created_by: user.profile,
     });
 
