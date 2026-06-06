@@ -22,6 +22,7 @@ export interface AuthUser {
   phone?: string | null;
   image?: string | null;
   role: string;
+  roleName?: string;
   permissions?: string[];
   pages?: string[];
 }

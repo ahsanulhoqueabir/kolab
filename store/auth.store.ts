@@ -10,6 +10,14 @@ import type { ApiResponse } from "@/lib/api/api-response";
 
 // ─── State Shape ───────────────────────────────────────────────────────────
 
+export interface StoredAccount {
+  user: AuthUser;
+  accessToken: string;
+  permissions: string[];
+  pages: string[];
+  landingPage: string | null;
+}
+
 export interface AuthState {
   /** Authenticated user profile */
   user: AuthUser | null;
@@ -27,6 +35,8 @@ export interface AuthState {
   isProcessing: boolean;
   /** Last error message, if any */
   error: string | null;
+  /** Stored accounts for multi-account support */
+  accounts: StoredAccount[];
 }
 
 interface AuthActions {
@@ -36,8 +46,12 @@ interface AuthActions {
   signUp: (params: SignUpParams) => Promise<void>;
   /** Logout — clears persisted state */
   logout: () => void;
-  /** Re-initialise auth from stored token (e.g. on page refresh) */
-  initAuth: () => Promise<void>;
+  /** Logout current active account and optionally switch to next user */
+  logoutCurrent: (nextUserId?: string) => void;
+  /** Switch active account context to selected user ID */
+  switchAccount: (userId: string) => Promise<void>;
+  /** Re-initialise auth from stored token (e.g. on page refresh or account switch) */
+  initAuth: (token?: string) => Promise<void>;
   /** Set hydration flag (called by persist onRehydrate) */
   setHasHydrated: (value: boolean) => void;
   /** Clear any error */
@@ -57,6 +71,7 @@ const initialState: AuthState = {
   hasHydrated: false,
   isProcessing: false,
   error: null,
+  accounts: [],
 };
 
 // ─── Store ─────────────────────────────────────────────────────────────────
@@ -72,7 +87,27 @@ export const useAuthStore = create<AuthStore>()(
 
       /* ── Login ──────────────────────────────────────────────────── */
       login: async (params) => {
-        set({ isProcessing: true, error: null });
+        const previousState = get();
+        let updatedAccounts = [...previousState.accounts];
+        if (previousState.user && previousState.accessToken) {
+          const existsIdx = updatedAccounts.findIndex(
+            (acc) => acc.user.id === previousState.user!.id
+          );
+          const oldSession: StoredAccount = {
+            user: previousState.user,
+            accessToken: previousState.accessToken,
+            permissions: previousState.permissions,
+            pages: previousState.pages,
+            landingPage: previousState.landingPage,
+          };
+          if (existsIdx >= 0) {
+            updatedAccounts[existsIdx] = oldSession;
+          } else {
+            updatedAccounts.push(oldSession);
+          }
+        }
+
+        set({ isProcessing: true, error: null, accounts: updatedAccounts });
 
         try {
           const { data } = await api_client.post("/auth/login", params);
@@ -87,8 +122,7 @@ export const useAuthStore = create<AuthStore>()(
           });
 
           // Fetch permissions & pages from /auth/me
-          // Use direct fetch instead of api_client to avoid interceptor loops
-          await get().initAuth();
+          await get().initAuth(token);
         } catch (err: unknown) {
           const message =
             (err as { response?: { data?: { error?: string } } })?.response
@@ -102,7 +136,27 @@ export const useAuthStore = create<AuthStore>()(
 
       /* ── Sign Up ────────────────────────────────────────────────── */
       signUp: async (params) => {
-        set({ isProcessing: true, error: null });
+        const previousState = get();
+        let updatedAccounts = [...previousState.accounts];
+        if (previousState.user && previousState.accessToken) {
+          const existsIdx = updatedAccounts.findIndex(
+            (acc) => acc.user.id === previousState.user!.id
+          );
+          const oldSession: StoredAccount = {
+            user: previousState.user,
+            accessToken: previousState.accessToken,
+            permissions: previousState.permissions,
+            pages: previousState.pages,
+            landingPage: previousState.landingPage,
+          };
+          if (existsIdx >= 0) {
+            updatedAccounts[existsIdx] = oldSession;
+          } else {
+            updatedAccounts.push(oldSession);
+          }
+        }
+
+        set({ isProcessing: true, error: null, accounts: updatedAccounts });
 
         try {
           const { data } = await api_client.post("/auth/signup", params);
@@ -117,7 +171,7 @@ export const useAuthStore = create<AuthStore>()(
           });
 
           // Fetch permissions & pages from /auth/me
-          await get().initAuth();
+          await get().initAuth(token);
         } catch (err: unknown) {
           const message =
             (err as { response?: { data?: { error?: string } } })?.response
@@ -137,12 +191,103 @@ export const useAuthStore = create<AuthStore>()(
           pages: [],
           landingPage: null,
           hasHydrated: get().hasHydrated,
+          accounts: [],
         });
       },
 
+      /* ── Logout Current ─────────────────────────────────────────── */
+      logoutCurrent: (nextUserId?: string) => {
+        const { user, accounts } = get();
+        if (!user) return;
+
+        const remainingAccounts = accounts.filter((acc) => acc.user.id !== user.id);
+
+        if (remainingAccounts.length === 0) {
+          // No other accounts left, do a full logout
+          set({
+            ...initialState,
+            permissions: [],
+            pages: [],
+            landingPage: null,
+            hasHydrated: get().hasHydrated,
+            accounts: [],
+          });
+          window.location.href = "/login";
+          return;
+        }
+
+        // Determine which account to switch to
+        let targetAccount = remainingAccounts[0];
+        if (nextUserId) {
+          const found = remainingAccounts.find((acc) => acc.user.id === nextUserId);
+          if (found) targetAccount = found;
+        }
+
+        set({
+          user: targetAccount.user,
+          accessToken: targetAccount.accessToken,
+          permissions: targetAccount.permissions,
+          pages: targetAccount.pages,
+          landingPage: targetAccount.landingPage,
+          accounts: remainingAccounts,
+        });
+
+        window.location.href = targetAccount.landingPage || "/dashboard";
+      },
+
+      /* ── Switch Account ─────────────────────────────────────────── */
+      switchAccount: async (userId) => {
+        const currentActive = get();
+        let updatedAccounts = [...currentActive.accounts];
+
+        // Save current active account first
+        if (currentActive.user && currentActive.accessToken) {
+          const existsIdx = updatedAccounts.findIndex(
+            (acc) => acc.user.id === currentActive.user!.id
+          );
+          const currentSession: StoredAccount = {
+            user: currentActive.user,
+            accessToken: currentActive.accessToken,
+            permissions: currentActive.permissions,
+            pages: currentActive.pages,
+            landingPage: currentActive.landingPage,
+          };
+          if (existsIdx >= 0) {
+            updatedAccounts[existsIdx] = currentSession;
+          } else {
+            updatedAccounts.push(currentSession);
+          }
+        }
+
+        const targetAccount = updatedAccounts.find((acc) => acc.user.id === userId);
+        if (!targetAccount) return;
+
+        // Set token and status first to make sure api_client utilizes it
+        set({
+          accessToken: targetAccount.accessToken,
+          isProcessing: true,
+          error: null,
+        });
+
+        try {
+          // Re-initialize auth using target account token to refresh profile/permissions
+          await get().initAuth(targetAccount.accessToken);
+        } catch (err) {
+          set({ isProcessing: false, error: (err as Error).message });
+          throw err;
+        }
+
+        set({ isProcessing: false });
+
+        window.location.href = targetAccount.landingPage || "/dashboard";
+      },
+
       /* ── Init Auth (re-validate stored token) ───────────────────── */
-      initAuth: async () => {
-        const { accessToken } = get();
+      initAuth: async (token?: string) => {
+        if (token) {
+          set({ accessToken: token });
+        }
+        const accessToken = token || get().accessToken;
         if (!accessToken) {
           set({
             user: null,
@@ -182,15 +327,37 @@ export const useAuthStore = create<AuthStore>()(
               typeof profile.role === "string"
                 ? (profile.role as string)
                 : (roleData?.id ?? ""),
+            roleName: roleData?.name ?? "",
             permissions: (profile.permissions ?? []) as string[],
             pages: (profile.pages ?? []) as string[],
           };
+
+          // Update accounts list with the newly active user session
+          const currentAccounts = get().accounts;
+          const newSession: StoredAccount = {
+            user,
+            accessToken: accessToken,
+            permissions: (profile.permissions ?? []) as string[],
+            pages: (profile.pages ?? []) as string[],
+            landingPage: (roleData?.landing_page as string) || null,
+          };
+
+          const existsIdx = currentAccounts.findIndex(
+            (acc) => acc.user.id === user.id
+          );
+          let updatedAccounts = [...currentAccounts];
+          if (existsIdx >= 0) {
+            updatedAccounts[existsIdx] = newSession;
+          } else {
+            updatedAccounts.push(newSession);
+          }
 
           set({
             user,
             permissions: (profile.permissions ?? []) as string[],
             pages: (profile.pages ?? []) as string[],
             landingPage: (roleData?.landing_page as string) || null,
+            accounts: updatedAccounts,
             error: null,
           });
         } catch (err: unknown) {
@@ -243,6 +410,7 @@ export const useAuthStore = create<AuthStore>()(
         permissions: state.permissions,
         pages: state.pages,
         landingPage: state.landingPage,
+        accounts: state.accounts,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {

@@ -18,6 +18,18 @@ const createApiClient = (): AxiosInstance => {
   // Request interceptor to wait for auth and add token
   instance.interceptors.request.use(
     async (config) => {
+      // Wait for hydration if it hasn't happened yet
+      if (!useAuthStore.getState().hasHydrated) {
+        await new Promise<void>((resolve) => {
+          const unsubscribe = useAuthStore.subscribe((state) => {
+            if (state.hasHydrated) {
+              unsubscribe();
+              resolve();
+            }
+          });
+        });
+      }
+
       // Skip auth check for public endpoints
       const isPublic = config.url?.startsWith("/auth/") ?? false;
 
@@ -34,6 +46,7 @@ const createApiClient = (): AxiosInstance => {
 
       const { accessToken } = useAuthStore.getState();
       if (accessToken) {
+        config.headers = config.headers || {};
         config.headers.Authorization = `Bearer ${accessToken}`;
       }
       return config;
