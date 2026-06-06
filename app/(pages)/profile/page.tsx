@@ -214,7 +214,11 @@ function ProfilePageContent() {
                   ) : (
                     <Camera className="h-4 w-4 mr-2" />
                   )}
-                  {isUploading ? `Uploading… ${uploadProgress}%` : imagePreview ? "Change Image" : "Upload Image"}
+                  {isUploading
+                    ? `Uploading… ${uploadProgress}%`
+                    : imagePreview
+                      ? "Change Image"
+                      : "Upload Image"}
                 </Button>
                 <p className="text-xs text-muted-foreground">
                   PNG, JPG or WEBP. Max 2MB.

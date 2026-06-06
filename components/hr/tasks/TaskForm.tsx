@@ -85,11 +85,17 @@ export function TaskForm({
   }, [users]);
 
   const priorityOptions = useMemo(() => {
-    return PRIORITY_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }));
+    return PRIORITY_OPTIONS.map((opt) => ({
+      value: opt.value,
+      label: opt.label,
+    }));
   }, []);
 
   const statusOptions = useMemo(() => {
-    return STATUS_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }));
+    return STATUS_OPTIONS.map((opt) => ({
+      value: opt.value,
+      label: opt.label,
+    }));
   }, []);
 
   const dueDateValue = useWatch({ control, name: "due_date" });
@@ -130,10 +136,7 @@ export function TaskForm({
       uploadedUrls = await uploadAndGetUrls("tasks");
     }
 
-    const allAttachments = [
-      ...(data.attachment || []),
-      ...uploadedUrls,
-    ];
+    const allAttachments = [...(data.attachment || []), ...uploadedUrls];
 
     clearUploadFiles();
 
