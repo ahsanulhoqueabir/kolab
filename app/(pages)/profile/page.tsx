@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { User, Camera, X } from "lucide-react";
+import { User, Camera, X, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader } from "@/components/core/ui/card";
 import { Input } from "@/components/core/ui/input";
@@ -20,6 +20,7 @@ import { ProtectedRoute } from "@/components/core/ProtectedRoute";
 import { PageAccessGuard } from "@/components/core/PageAccessGuard";
 import { useAuthStore } from "@/store/auth.store";
 import { useProfileStore } from "@/store/profile.store";
+import { useUploadStore } from "@/store/upload.store";
 import { useReturnUrl } from "@/hooks/use-return-url";
 import {
   PROFILE_DEFAULT_VALUES,
@@ -31,18 +32,27 @@ function ProfilePageContent() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { updateProfile, isProcessing } = useProfileStore();
+  const uploadAndGetUrls = useUploadStore((s) => s.uploadAndGetUrls);
+  const isUploading = useUploadStore((s) => s.isUploading);
+  const uploadProgress = useUploadStore((s) => s.uploadProgress);
   const { returnTo } = useReturnUrl("/profile");
   const [resetPassword, setResetPassword] = useState(false);
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const busy = isProcessing || isUploading;
 
   /**
    * Derive image preview:
-   * 1. Newly selected file (base64) → use directly
+   * 1. Newly selected file → local preview
    * 2. Existing image from server → use as-is
-   * 3. Nothing → null (show fallback)
+   * 3. Remove requested → null (show fallback)
    */
-  const imagePreview = imageBase64 ?? user?.image ?? null;
+  const imagePreview = removeImage
+    ? null
+    : (localPreview ?? user?.image ?? null);
 
   const {
     register,
@@ -79,19 +89,15 @@ function ProfilePageContent() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setImageBase64(result);
-    };
-    reader.onerror = () => {
-      toast.error("Failed to read image file");
-    };
-    reader.readAsDataURL(file);
+    setRemoveImage(false);
+    setSelectedFile(file);
+    setLocalPreview(URL.createObjectURL(file));
   };
 
   const handleRemoveImage = () => {
-    setImageBase64(""); // empty string signals "remove image"
+    setSelectedFile(null);
+    setLocalPreview(null);
+    setRemoveImage(true);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -113,11 +119,13 @@ function ProfilePageContent() {
       phone: data.phone || undefined,
     };
 
-    // Image: send base64 if newly selected, or empty string to remove
-    if (imageBase64) {
-      updateData.image = imageBase64;
-    } else if (imageBase64 === "" && user?.image) {
-      // User explicitly removed the image
+    // Image: upload via signed URL → public URL, or empty to remove
+    if (selectedFile) {
+      const uploaded = await uploadAndGetUrls("profiles");
+      if (uploaded.length > 0) {
+        updateData.image = uploaded[0];
+      }
+    } else if (removeImage) {
       updateData.image = "";
     }
 
@@ -129,7 +137,9 @@ function ProfilePageContent() {
 
     if (result.success) {
       toast.success("Profile updated successfully");
-      setImageBase64(null);
+      setSelectedFile(null);
+      setLocalPreview(null);
+      setRemoveImage(false);
       setResetPassword(false);
     } else {
       toast.error(result.message || "Failed to update profile");
@@ -197,10 +207,14 @@ function ProfilePageContent() {
                   variant="outline"
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={isProcessing}
+                  disabled={busy}
                 >
-                  <Camera className="h-4 w-4 mr-2" />
-                  {imagePreview ? "Change Image" : "Upload Image"}
+                  {isUploading ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Camera className="h-4 w-4 mr-2" />
+                  )}
+                  {isUploading ? `Uploading… ${uploadProgress}%` : imagePreview ? "Change Image" : "Upload Image"}
                 </Button>
                 <p className="text-xs text-muted-foreground">
                   PNG, JPG or WEBP. Max 2MB.
@@ -230,7 +244,7 @@ function ProfilePageContent() {
                   id="name"
                   {...register("name", PROFILE_VALIDATION_RULES.name)}
                   className={errors.name ? "border-destructive" : ""}
-                  disabled={isProcessing}
+                  disabled={busy}
                 />
                 {errors.name && (
                   <p className="text-sm text-destructive">
@@ -246,7 +260,7 @@ function ProfilePageContent() {
                   type="tel"
                   {...register("phone", PROFILE_VALIDATION_RULES.phone)}
                   className={errors.phone ? "border-destructive" : ""}
-                  disabled={isProcessing}
+                  disabled={busy}
                   placeholder="+8801XXXXXXXXX"
                 />
                 {errors.phone && (
@@ -286,7 +300,7 @@ function ProfilePageContent() {
                   onCheckedChange={(checked) =>
                     setResetPassword(checked === true)
                   }
-                  disabled={isProcessing}
+                  disabled={busy}
                 />
                 <span className="text-sm text-muted-foreground">
                   Change password
@@ -316,7 +330,7 @@ function ProfilePageContent() {
                           PROFILE_VALIDATION_RULES.password,
                         )}
                         className={errors.password ? "border-destructive" : ""}
-                        disabled={isProcessing}
+                        disabled={busy}
                       />
                       {errors.password && (
                         <p className="text-sm text-destructive">
@@ -339,7 +353,7 @@ function ProfilePageContent() {
                         className={
                           errors.confirmPassword ? "border-destructive" : ""
                         }
-                        disabled={isProcessing}
+                        disabled={busy}
                       />
                       {errors.confirmPassword && (
                         <p className="text-sm text-destructive">
@@ -360,12 +374,12 @@ function ProfilePageContent() {
             type="button"
             variant="outline"
             onClick={() => router.push(returnTo)}
-            disabled={isProcessing}
+            disabled={busy}
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={isProcessing}>
-            {isProcessing ? "Saving..." : "Save Changes"}
+          <Button type="submit" disabled={busy}>
+            {busy ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </form>

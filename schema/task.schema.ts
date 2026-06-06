@@ -12,6 +12,7 @@ export const TASK_DEFAULT_VALUES: CreateTaskParams = {
   due_date: "",
   priority: "MEDIUM" as TaskPriority,
   status: "TODO" as TaskStatus,
+  attachment: [],
 };
 
 export const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [

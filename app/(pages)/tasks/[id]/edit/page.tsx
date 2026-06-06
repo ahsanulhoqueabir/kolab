@@ -85,6 +85,7 @@ function EditTaskPageContent() {
         priority: data.priority,
         status: data.status,
         project: data.project,
+        attachment: data.attachment,
       });
 
       if (result.success) {
