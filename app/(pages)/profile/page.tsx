@@ -36,7 +36,12 @@ function ProfilePageContent() {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Derive image preview: prefer newly selected base64, fall back to existing user image
+  /**
+   * Derive image preview:
+   * 1. Newly selected file (base64) → use directly
+   * 2. Existing image from server → use as-is
+   * 3. Nothing → null (show fallback)
+   */
   const imagePreview = imageBase64 ?? user?.image ?? null;
 
   const {

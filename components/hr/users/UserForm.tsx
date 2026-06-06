@@ -61,7 +61,7 @@ export function UserForm({
   const [resetPassword, setResetPassword] = useState(false);
   const [isImageUploading, setIsImageUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(
-    () => initialData?.image || null,
+    () => initialData?.image ?? null,
   );
   const imageBase64Ref = useRef<string>("");
 

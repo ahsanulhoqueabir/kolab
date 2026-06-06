@@ -44,7 +44,7 @@ export function TeamMemberCard({ member, onRemove }: TeamMemberCardProps) {
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10">
             {profile?.image ? (
-              <AvatarImage src={profile.image} alt={name} />
+              <AvatarImage src={profile.image ?? ""} alt={name} />
             ) : (
               <AvatarFallback>
                 <User className="h-5 w-5 text-muted-foreground" />

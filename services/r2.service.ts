@@ -1,475 +1,356 @@
-import { r2 } from "@/config/env.config";
 import {
-  CopyObjectPair,
-  CopyResult,
-  DeleteResult,
-  ExistsResult,
-  R2Body,
-  SignedUrlParams,
-  SignedUrlResult,
-  UploadObjectParams,
-  UploadResult,
-} from "@/types/business/r2.types";
-import {
-  CopyObjectCommand,
-  DeleteObjectCommand,
-  DeleteObjectsCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  PutObjectCommand,
   S3Client,
-  type DeleteObjectsCommandInput,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+  GetObjectCommand,
 } from "@aws-sdk/client-s3";
-import { NodeHttpHandler } from "@smithy/node-http-handler";
-import { Agent as HttpsAgent } from "https";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import type {
+  UploadFileParams,
+  UploadFileResult,
+  DeleteFileParams,
+  DeleteFileResult,
+  GetFileUrlParams,
+  ListFilesParams,
+  ListFilesResult,
+  FileObject,
+} from "@/types/business/file.types";
+import { r2 } from "@/config/env.config";
 
-export class R2Service {
-  private static readonly endpoint = `https://${r2.id}.r2.cloudflarestorage.com`;
-  private static readonly publicBaseUrl = r2.publicUrl;
-  private static client: S3Client | null = null;
+export class FileService {
+  private s3Client: S3Client;
+  private bucketName: string;
+  private publicUrl: string;
 
-  private static getClient() {
-    if (this.client) {
-      return this.client;
-    }
-
+  constructor() {
+    // Validate required configuration
     if (!r2.id || !r2.key || !r2.secret || !r2.bucket) {
-      throw new Error("R2 configuration is missing in environment variables");
+      throw new Error(
+        "Missing required Cloudflare R2 configuration. Please check your environment variables: CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY, CLOUDFLARE_R2_BUCKET_NAME",
+      );
     }
 
-    this.client = new S3Client({
+    this.bucketName = r2.bucket;
+    this.publicUrl = r2.publicUrl!;
+
+    // Initialize S3 client for Cloudflare R2
+    this.s3Client = new S3Client({
       region: "auto",
-      endpoint: this.endpoint,
+      endpoint: `https://${r2.id}.r2.cloudflarestorage.com`,
       credentials: {
         accessKeyId: r2.key,
         secretAccessKey: r2.secret,
       },
-      requestHandler: new NodeHttpHandler({
-        httpsAgent: new HttpsAgent({
-          rejectUnauthorized: true,
-          keepAlive: true,
-          secureOptions: 0x10000000, // TLSv1_2_METHOD — forces TLS 1.2
-        }),
-      }),
+    });
+  }
+
+  /**
+   * Upload a file to Cloudflare R2
+   */
+  async uploadFile(params: UploadFileParams): Promise<UploadFileResult> {
+    const { file, fileName, folder = "", contentType } = params;
+
+    // Validate inputs
+    if (!file || !fileName) {
+      throw new Error("File and fileName are required");
+    }
+
+    // Generate unique file key
+    const timestamp = Date.now();
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const key = folder
+      ? `${folder.replace(/^\/|\/$/g, "")}/${timestamp}_${sanitizedFileName}`
+      : `${timestamp}_${sanitizedFileName}`;
+
+    // Convert File to Buffer if needed
+    let fileBuffer: Buffer;
+    let fileSize: number;
+
+    if (file instanceof File) {
+      const arrayBuffer = await file.arrayBuffer();
+      fileBuffer = Buffer.from(arrayBuffer);
+      fileSize = file.size;
+    } else {
+      fileBuffer = file;
+      fileSize = file.length;
+    }
+
+    // Upload to R2
+    const command = new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+      Body: fileBuffer,
+      ContentType: contentType || this.getContentType(fileName),
     });
 
-    return this.client;
+    await this.s3Client.send(command);
+
+    // Generate public URL
+    const url = this.publicUrl
+      ? `${this.publicUrl}/${key}`
+      : `https://${this.bucketName}.r2.cloudflarestorage.com/${key}`;
+
+    return {
+      success: true,
+      url,
+      key,
+      fileName: sanitizedFileName,
+      size: fileSize,
+    };
   }
-
-  private static sanitizePathPart(value: string) {
-    return value
-      .trim()
-      .toLowerCase()
-      .replace(/_/g, "-")
-      .replace(/[^a-z0-9.-/]+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  }
-  private static sanitizeTitle(value: string) {
-    return value
-      .trim()
-      .toLowerCase()
-      .replace(/[_/]+/g, "-")
-      .replace(/[^a-z0-9.-]+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  }
-
-  private static normalizeBody(body: R2Body) {
-    if (body instanceof ArrayBuffer) {
-      return new Uint8Array(body);
-    }
-
-    return body;
-  }
-
-  static createObjectKey(fileName: string, folder = "uploads", ext?: string) {
-    const cleanName = this.sanitizeTitle(fileName);
-    const cleanFolder = this.sanitizePathPart(folder) || "uploads";
-    const stamp = Date.now();
-    const extension = ext ? `.${ext.replace(/^\./, "")}` : "";
-
-    return `${cleanFolder}/${stamp}-${cleanName}${extension}`;
-  }
-
-  static getPublicUrl(key: string) {
-    const base = this.publicBaseUrl;
-    if (!base) {
-      return undefined;
-    }
-
-    return `${base.replace(/\/$/, "")}/${key}`;
-  }
-
-  static async uploadObject(params: UploadObjectParams): Promise<UploadResult> {
-    try {
-      const client = this.getClient();
-      const key = this.createObjectKey(
-        params.fileName,
-        params.folder,
-        params.type,
-      );
-
-      const command = new PutObjectCommand({
-        Bucket: r2.bucket,
-        Key: key,
-        Body: this.normalizeBody(params.body),
-        ContentType: params.contentType || "application/octet-stream",
-        CacheControl: params.cacheControl,
-        Metadata: params.metadata,
-      });
-
-      const response = await client.send(command);
-
-      return {
-        success: true,
-        key,
-        etag: response.ETag,
-        publicUrl: this.getPublicUrl(key),
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to upload file",
-      };
-    }
-  }
-
-  static async generateSignedUploadUrl(
-    fileName: string,
-    options?: {
-      folder?: string;
-      contentType?: string;
-      expiresIn?: number;
-      cacheControl?: string;
-      metadata?: Record<string, string>;
-    },
-  ): Promise<SignedUrlResult> {
-    try {
-      const client = this.getClient();
-      const key = this.createObjectKey(fileName, options?.folder);
-      const expiresIn = options?.expiresIn ?? 300;
-
-      const command = new PutObjectCommand({
-        Bucket: r2.bucket,
-        Key: key,
-        CacheControl: options?.cacheControl,
-        Metadata: options?.metadata,
-      });
-
-      const url = await getSignedUrl(client, command, {
-        expiresIn,
-      });
-
-      return {
-        success: true,
-        key,
-        url,
-        expiresIn,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to generate signed upload URL",
-      };
-    }
-  }
-
-  static async generateSignedUrl({
-    key,
-    expiresIn = 18000, // 5 hours
-    type = "view",
-    fileName,
-  }: SignedUrlParams): Promise<SignedUrlResult> {
-    try {
-      const client = this.getClient();
-      let contentType: string | undefined;
-
-      try {
-        const head = await client.send(
-          new HeadObjectCommand({
-            Bucket: r2.bucket,
-            Key: key,
-          }),
-        );
-
-        contentType = head.ContentType;
-      } catch {
-        // Skip content type when metadata fetch fails.
-      }
-
-      const resolvedFileName = fileName || key.split("/").pop() || "download";
-
-      const command = new GetObjectCommand({
-        Bucket: r2.bucket,
-        Key: key,
-
-        ...(type === "download" && {
-          ResponseContentDisposition: `attachment; filename="${resolvedFileName}"`,
-        }),
-
-        ...(type === "view" && {
-          ResponseContentDisposition: `inline`,
-        }),
-      });
-
-      const url = await getSignedUrl(client, command, { expiresIn });
-
-      return {
-        success: true,
-        key,
-        url,
-        expiresIn,
-        type,
-        contentType,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to generate signed URL",
-      };
-    }
-  }
-
-  static async deleteObject(key: string): Promise<DeleteResult> {
-    try {
-      const client = this.getClient();
-      await client.send(
-        new DeleteObjectCommand({
-          Bucket: r2.bucket,
-          Key: key,
-        }),
-      );
-
-      return {
-        success: true,
-        deletedKeys: [key],
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to delete file",
-      };
-    }
-  }
-
-  static async deleteMultipleObjects(keys: string[]): Promise<DeleteResult> {
-    try {
-      if (!keys.length) {
-        return { success: true, deletedKeys: [] };
-      }
-
-      const client = this.getClient();
-
-      const uniqueKeys = [...new Set(keys)];
-      const chunkSize = 1000;
-
-      const allDeleted: string[] = [];
-      const allFailed: string[] = [];
-
-      for (let i = 0; i < uniqueKeys.length; i += chunkSize) {
-        const chunk = uniqueKeys.slice(i, i + chunkSize);
-
-        const payload: DeleteObjectsCommandInput = {
-          Bucket: r2.bucket,
-          Delete: {
-            Objects: chunk.map((Key) => ({ Key })),
-          },
-        };
-
-        const response = await client.send(new DeleteObjectsCommand(payload));
-
-        const deleted = (response.Deleted ?? [])
-          .map((i) => i.Key)
-          .filter((key): key is string => !!key);
-
-        const failed = (response.Errors ?? [])
-          .map((i) => i.Key)
-          .filter((key): key is string => !!key);
-
-        allDeleted.push(...deleted);
-        allFailed.push(...failed);
-      }
-
-      return {
-        success: allFailed.length === 0,
-        deletedKeys: allDeleted,
-        failedKeys: allFailed,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to delete files",
-      };
-    }
-  }
-
-  static async copyMultipleObjects(
-    pairs: CopyObjectPair[],
-  ): Promise<CopyResult> {
-    try {
-      if (!pairs.length) {
-        return { success: true, copiedKeys: [] };
-      }
-
-      const client = this.getClient();
-      const copiedKeys: string[] = [];
-      const failedPairs: CopyObjectPair[] = [];
-
-      for (const pair of pairs) {
-        try {
-          await client.send(
-            new CopyObjectCommand({
-              Bucket: r2.bucket,
-              Key: pair.dest,
-              CopySource: encodeURI(`${r2.bucket}/${pair.src}`),
-            }),
-          );
-
-          copiedKeys.push(pair.dest);
-        } catch {
-          failedPairs.push(pair);
-        }
-      }
-
-      return {
-        success: failedPairs.length === 0,
-        copiedKeys,
-        failedPairs,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to copy files",
-      };
-    }
-  }
-
-  static async objectExists(key: string): Promise<ExistsResult> {
-    try {
-      const client = this.getClient();
-      const response = await client.send(
-        new HeadObjectCommand({
-          Bucket: r2.bucket,
-          Key: key,
-        }),
-      );
-
-      return {
-        success: true,
-        exists: true,
-        contentType: response.ContentType,
-        contentLength: response.ContentLength,
-        lastModified: response.LastModified,
-      };
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to fetch file metadata";
-
-      if (message.includes("NotFound") || message.includes("404")) {
-        return {
-          success: true,
-          exists: false,
-        };
-      }
-
-      return {
-        success: false,
-        exists: false,
-        error: message,
-      };
-    }
-  }
-
-  // ─── Base64 Attachment Processing ──────────────────────────────────
 
   /**
-   * Process an array of attachment entries.
-   *
-   * - If an entry is a **base64 data URI** (starts with "data:"), it is
-   *   uploaded to R2 via `uploadObject` and replaced with the resulting
-   *   public URL.
-   * - If an entry is already a **URL** (starts with "http"), it is kept
-   *   as-is.
-   *
-   * @param attachments - Array of strings (base64 data URIs and/or URLs).
-   * @param folder      - R2 folder prefix (e.g. "projects", "tasks").
-   * @returns A new array where all base64 entries are replaced with R2 URLs.
+   * Delete a file from Cloudflare R2
    */
-  static async processAttachments(
-    attachments: string[],
-    folder = "uploads",
-  ): Promise<string[]> {
-    if (!attachments || !attachments.length) return [];
+  async deleteFile(params: DeleteFileParams): Promise<DeleteFileResult> {
+    const { key } = params;
 
-    const results: string[] = [];
+    if (!key) {
+      throw new Error("File key is required");
+    }
 
-    for (const item of attachments) {
+    const command = new DeleteObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+    });
+
+    await this.s3Client.send(command);
+
+    return {
+      success: true,
+      key,
+    };
+  }
+
+  /**
+   * Get file URL (public or signed)
+   */
+  async getFileUrl(params: GetFileUrlParams): Promise<string> {
+    const { key, expiresIn } = params;
+
+    if (!key) {
+      throw new Error("File key is required");
+    }
+
+    // If public URL is configured and no expiry needed, return public URL
+    if (this.publicUrl && !expiresIn) {
+      return `${this.publicUrl}/${key}`;
+    }
+
+    // Generate signed URL
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+    });
+
+    const signedUrl = await getSignedUrl(this.s3Client, command, {
+      expiresIn: expiresIn || 3600, // Default 1 hour
+    });
+
+    return signedUrl;
+  }
+
+  /**
+   * List files in R2 bucket
+   */
+  async listFiles(params: ListFilesParams = {}): Promise<ListFilesResult> {
+    const { prefix = "", maxKeys = 1000 } = params;
+
+    const command = new ListObjectsV2Command({
+      Bucket: this.bucketName,
+      Prefix: prefix,
+      MaxKeys: maxKeys,
+    });
+
+    const response = await this.s3Client.send(command);
+
+    const files: FileObject[] = (response.Contents || [])
+      .map((item) => {
+        if (!item.Key) return null;
+
+        return {
+          key: item.Key,
+          size: item.Size || 0,
+          lastModified: item.LastModified || new Date(),
+          url: this.publicUrl
+            ? `${this.publicUrl}/${item.Key}`
+            : `https://${this.bucketName}.r2.cloudflarestorage.com/${item.Key}`,
+        };
+      })
+      .filter((item): item is FileObject => item !== null);
+
+    return {
+      files,
+      hasMore: response.IsTruncated || false,
+    };
+  }
+
+  /**
+   * Upload multiple files
+   */
+  async uploadMultipleFiles(
+    files: UploadFileParams[],
+  ): Promise<UploadFileResult[]> {
+    if (!files || files.length === 0) {
+      throw new Error("Files array cannot be empty");
+    }
+
+    const uploadPromises = files.map((fileParams) =>
+      this.uploadFile(fileParams),
+    );
+    return await Promise.all(uploadPromises);
+  }
+
+  /**
+   * Delete multiple files
+   */
+  async deleteMultipleFiles(keys: string[]): Promise<DeleteFileResult[]> {
+    if (!keys || keys.length === 0) {
+      throw new Error("Keys array cannot be empty");
+    }
+
+    const deletePromises = keys.map((key) => this.deleteFile({ key }));
+    return await Promise.all(deletePromises);
+  }
+
+  /**
+   * Helper: Get content type based on file extension
+   */
+  private getContentType(fileName: string): string {
+    const extension = fileName.split(".").pop()?.toLowerCase();
+
+    const contentTypes: Record<string, string> = {
+      // Images
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      gif: "image/gif",
+      webp: "image/webp",
+      svg: "image/svg+xml",
+
+      // Documents
+      pdf: "application/pdf",
+      doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+
+      // Videos
+      mp4: "video/mp4",
+      webm: "video/webm",
+
+      // Audio
+      mp3: "audio/mpeg",
+      wav: "audio/wav",
+
+      // Other
+      txt: "text/plain",
+      json: "application/json",
+      zip: "application/zip",
+    };
+
+    return contentTypes[extension || ""] || "application/octet-stream";
+  }
+}
+
+// Export singleton instance
+export const fileService = new FileService();
+
+// ─────────────────────────────────────────────────────────────
+// R2Service — static facade used by route handlers & services
+// ─────────────────────────────────────────────────────────────
+
+interface UploadObjectParams {
+  body: Buffer;
+  fileName: string;
+  folder?: string;
+  contentType?: string;
+}
+
+interface UploadObjectResult {
+  success: boolean;
+  publicUrl?: string;
+  error?: string;
+}
+
+/**
+ * Processes an array of base64 data-URI strings → uploads each to R2
+ * → returns an array of public URLs.
+ *
+ * Each item in the input array can be:
+ *  - A base64 data URI (starts with "data:") → uploaded to R2
+ *  - An https URL → kept as-is
+ *  - Empty/falsy → filtered out
+ */
+async function processAttachments(
+  attachments: string[],
+  folder: string,
+): Promise<string[]> {
+  if (!attachments || attachments.length === 0) return [];
+
+  const results = await Promise.all(
+    attachments.map(async (item) => {
+      if (!item) return null;
+
       // Already a URL → keep as-is
-      if (item.startsWith("http")) {
-        results.push(item);
-        continue;
-      }
+      if (item.startsWith("http")) return item;
 
       // Base64 data URI → upload to R2
-      if (item.startsWith("data:")) {
-        const uploaded = await this.uploadBase64(item, folder);
-        if (uploaded) {
-          results.push(uploaded);
-        }
-        // If upload fails, we skip the file (don't push anything)
-        continue;
-      }
+      const mimeMatch = item.match(/^data:(image\/(\w+));base64,/);
+      if (!mimeMatch) return null;
 
-      // Unknown format — keep as-is
-      results.push(item);
+      const ext = mimeMatch[2];
+      const base64Data = item.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, "base64");
+
+      const result = await fileService.uploadFile({
+        file: buffer,
+        fileName: `${Date.now()}.${ext}`,
+        folder,
+        contentType: mimeMatch[1],
+      });
+
+      return result.success ? result.url : null;
+    }),
+  );
+
+  return results.filter((url): url is string => url !== null);
+}
+
+export class R2Service {
+  /**
+   * Upload a single buffer/object to R2.
+   */
+  static async uploadObject(
+    params: UploadObjectParams,
+  ): Promise<UploadObjectResult> {
+    try {
+      const result = await fileService.uploadFile({
+        file: params.body,
+        fileName: params.fileName,
+        folder: params.folder,
+        contentType: params.contentType,
+      });
+
+      return {
+        success: true,
+        publicUrl: result.url,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: (err as Error).message || "R2 upload failed",
+      };
     }
-
-    return results;
   }
 
   /**
-   * Upload a base64 data URI to R2 and return the public URL.
+   * Upload multiple base64 attachments to R2.
+   * Returns array of public URLs (https URLs passed through).
    */
-  private static async uploadBase64(
-    dataUri: string,
+  static processAttachments(
+    attachments: string[],
     folder: string,
-  ): Promise<string | null> {
-    try {
-      // Parse the data URI: "data:image/png;base64,iVBOR..."
-      const matches = dataUri.match(/^data:([^;]+);base64,(.+)$/);
-      if (!matches) return null;
-
-      const contentType = matches[1];
-      const base64Data = matches[2];
-
-      // Decode base64 to buffer
-      const buffer = Buffer.from(base64Data, "base64");
-
-      // Derive a file name from content type
-      const ext = contentType.split("/").pop() || "bin";
-      const fileName = `upload.${ext}`;
-
-      const result = await this.uploadObject({
-        body: buffer,
-        fileName,
-        folder,
-        contentType,
-      });
-
-      return result.publicUrl || null;
-    } catch {
-      return null;
-    }
+  ): Promise<string[]> {
+    return processAttachments(attachments, folder);
   }
 }

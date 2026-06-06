@@ -10,11 +10,11 @@ export const jt = {
 };
 
 export const r2 = {
-  bucket: process.env.R2_BUCKET_NAME,
-  id: process.env.R2_ID,
-  key: process.env.R2_KEY,
-  secret: process.env.R2_SECRET,
-  publicUrl: process.env.R2_PUBLIC_URL,
+  bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME,
+  id: process.env.CLOUDFLARE_ACCOUNT_ID,
+  key: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID,
+  secret: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+  publicUrl: process.env.CLOUDFLARE_R2_PUBLIC_URL,
 };
 
 export const app = {
