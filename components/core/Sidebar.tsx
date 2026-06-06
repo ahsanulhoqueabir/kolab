@@ -57,7 +57,7 @@ export function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
-  const { user, pages, logout } = useAuthStore();
+  const { pages, logout } = useAuthStore();
   /** Compute which groups should be auto-expanded based on the current pathname */
   const computeInitialExpanded = useCallback(() => {
     const initial: Record<string, boolean> = {};
@@ -151,6 +151,9 @@ export function Sidebar({
                 width={24}
               />
               <span>Kolab</span>
+              <span className="ml-0.5 rounded-md border border-sidebar-border/60 bg-sidebar-accent/50 px-1.5 py-0.5 text-[10px] font-medium text-sidebar-foreground/60 leading-none">
+                V1.0
+              </span>
             </Link>
           )}
           <Button
@@ -302,6 +305,15 @@ export function Sidebar({
           })}
         </nav>
 
+        {/* Version badge — collapsed state */}
+        {collapsed && !mobileOpen && (
+          <div className="border-t border-sidebar-border py-2 flex justify-center">
+            <span className="text-[10px] font-medium text-sidebar-foreground/40 px-1 py-0.5 rounded border border-sidebar-border/40">
+              V1.0
+            </span>
+          </div>
+        )}
+
         {/* Bottom section */}
         <div className="border-t border-sidebar-border py-2 px-2 space-y-1">
           {BOTTOM_ITEMS.filter((item) => hasPageAccess(item.pageUrl)).map(
@@ -326,10 +338,6 @@ export function Sidebar({
             </button>
           ) : (
             <div className="px-3 py-2 space-y-2">
-              <div className="flex items-center gap-2 text-sm text-sidebar-foreground/80">
-                <User className="h-4 w-4" />
-                <span className="truncate">{user?.name || "User"}</span>
-              </div>
               <Button
                 variant="ghost"
                 size="sm"

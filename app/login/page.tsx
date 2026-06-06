@@ -10,11 +10,22 @@ import { Input } from "@/components/core/ui/input";
 import { Label } from "@/components/core/ui/label";
 import Image from "next/image";
 import { siteConfig } from "@/config/site.config";
+import { credentials } from "@/config/credentials.config";
 
 type LoginFormValues = {
   email: string;
   password: string;
 };
+
+type CredentialKey = keyof typeof credentials;
+
+const credentialMeta: Record<CredentialKey, { label: string; color: string }> =
+  {
+    admin: { label: "Admin", color: "bg-red-500 hover:bg-red-600" },
+    manager: { label: "Manager", color: "bg-blue-500 hover:bg-blue-600" },
+    member: { label: "Member", color: "bg-emerald-500 hover:bg-emerald-600" },
+    hr: { label: "HR", color: "bg-purple-500 hover:bg-purple-600" },
+  };
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,8 +41,16 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LoginFormValues>();
+
+  const fillCredentials = (key: CredentialKey) => {
+    const cred = credentials[key];
+    setValue("email", cred.mail);
+    setValue("password", cred.password);
+    clearError();
+  };
 
   const onSubmit = async (data: LoginFormValues) => {
     clearError();
@@ -71,6 +90,30 @@ export default function LoginPage() {
             <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
               Please enter your details to sign in
             </p>
+          </div>
+
+          {/* Quick Credential Selector */}
+          <div className="mb-6">
+            <p className="mb-3 text-center text-xs font-medium text-zinc-400 dark:text-zinc-500">
+              Quick sign-in as
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                Object.entries(credentialMeta) as [
+                  CredentialKey,
+                  (typeof credentialMeta)[CredentialKey],
+                ][]
+              ).map(([key, meta]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => fillCredentials(key)}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold text-white transition-all active:scale-95 ${meta.color}`}
+                >
+                  {meta.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Form */}
@@ -163,21 +206,16 @@ export default function LoginPage() {
       </div>
 
       {/* Right side: Image/Abstract (hidden on mobile) */}
-      <div className="relative hidden w-1/2 flex-col items-center justify-center overflow-hidden bg-zinc-900 px-12 lg:flex">
-        <div className="absolute inset-0 z-0 opacity-20 bg-[radial-gradient(circle_at_50%_50%,#4f4f4f,transparent)]" />
-        <div className="z-10 text-center">
-          <h2 className="text-4xl font-bold text-white mb-4">
-            {siteConfig.tagline}
-          </h2>
-          <p className="text-zinc-400 max-w-md mx-auto">
-            {siteConfig.description}
-          </p>
-        </div>
-        {/* Subtle decorative elements */}
-        <div className="mt-12 grid grid-cols-2 gap-4 z-10 opacity-30">
-          <div className="h-32 w-32 rounded-3xl border border-zinc-700 rotate-12" />
-          <div className="h-32 w-32 rounded-3xl bg-zinc-800 -rotate-12" />
-        </div>
+      <div className="relative hidden w-1/2 flex-col items-center justify-center overflow-hidden lg:flex">
+        {/* Background Image */}
+        <Image
+          src={siteConfig.banners.login}
+          alt="Kolab Login Background"
+          fill
+          className="object-contain object-right "
+          priority
+          sizes="50vw"
+        />
       </div>
     </div>
   );

@@ -22,6 +22,16 @@ export const siteConfig = {
     "Smart Project & Task Collaboration System. Manage projects, track tasks, and collaborate with your team in one unified platform.",
   tagline: "Empower Your Team, Simplify Your Projects",
   url: app.url || "http://localhost:3000",
+  banners: {
+    login: "https://cdn.kolab.ahsanull.com/system/poster-login.png",
+    og: "https://cdn.kolab.ahsanull.com/system/og-image.png",
+  },
+  developer: {
+    name: "MD Ahsanul Hoque Abir",
+    email: "contact.ahsanul@gmail.com",
+    phone: "01875507852",
+    portfolio: "https://ahsanull.com",
+  },
   nav: {
     main: [
       {
