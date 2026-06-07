@@ -1,5 +1,6 @@
 import { withAuth } from "@/lib/api/auth-middleware";
 import { ProfileService } from "@/services/profile.service";
+import { AuthSessionService } from "@/services/auth-sessions.service";
 import { fail, ok } from "@/lib/api/api-response";
 
 /**
@@ -15,6 +16,16 @@ import { fail, ok } from "@/lib/api/api-response";
  */
 export const GET = withAuth()(async ({ user }) => {
   try {
+    if (!user.session) {
+      return fail({ error: "Session ID not found in token", statusCode: 401 });
+    }
+
+    // Query session to check validity and expiry
+    const sessionResult = await AuthSessionService.validateAndGetSession(user.session);
+    if (!sessionResult.success) {
+      return fail({ error: sessionResult.error, statusCode: 401 });
+    }
+
     const result = await ProfileService.getById(user.profile);
 
     if (!result.success) {
@@ -47,6 +58,7 @@ export const GET = withAuth()(async ({ user }) => {
     return ok({
       data: {
         ...result.data,
+        currentSessionId: user.session,
         role: {
           id: roleData?.id as string,
           name: roleData?.name as string,

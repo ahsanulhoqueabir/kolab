@@ -3,9 +3,29 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { User, Camera, X, Loader2 } from "lucide-react";
+import {
+  User,
+  Camera,
+  X,
+  Loader2,
+  Monitor,
+  Smartphone,
+  Tablet,
+  Globe,
+  Shield,
+  Trash2,
+  ShieldAlert,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader } from "@/components/core/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/core/ui/dialog";
 import { Input } from "@/components/core/ui/input";
 import { Label } from "@/components/core/ui/label";
 import { Button } from "@/components/ui/button";
@@ -20,6 +40,7 @@ import { ProtectedRoute } from "@/components/core/ProtectedRoute";
 import { PageAccessGuard } from "@/components/core/PageAccessGuard";
 import { useAuthStore } from "@/store/auth.store";
 import { useProfileStore } from "@/store/profile.store";
+import { useSessionStore } from "@/store/session.store";
 import { useUploadStore } from "@/store/upload.store";
 import { useReturnUrl } from "@/hooks/use-return-url";
 import {
@@ -42,7 +63,55 @@ function ProfilePageContent() {
   const [removeImage, setRemoveImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const busy = isProcessing || isUploading;
+  const {
+    sessions,
+    isLoading: loadingSessions,
+    isProcessing: sessionProcessing,
+    error: sessionError,
+    fetchSessions,
+    revokeSession,
+    revokeAllOtherSessions,
+  } = useSessionStore();
+
+  const [sessionToRevoke, setSessionToRevoke] = useState<string | null>(null);
+  const [confirmRevokeAllOthers, setConfirmRevokeAllOthers] = useState(false);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
+
+  // Show toast on session errors
+  useEffect(() => {
+    if (sessionError) {
+      toast.error(sessionError);
+    }
+  }, [sessionError]);
+
+  const handleRevokeSession = (sessionId: string) => {
+    setSessionToRevoke(sessionId);
+  };
+
+  const executeRevokeSession = async (sessionId: string) => {
+    await revokeSession(sessionId);
+    if (!useSessionStore.getState().error) {
+      toast.success("Session revoked successfully");
+    }
+    setSessionToRevoke(null);
+  };
+
+  const handleRevokeAllOthers = () => {
+    setConfirmRevokeAllOthers(true);
+  };
+
+  const executeRevokeAllOthers = async () => {
+    await revokeAllOtherSessions();
+    if (!useSessionStore.getState().error) {
+      toast.success("All other sessions revoked successfully");
+    }
+    setConfirmRevokeAllOthers(false);
+  };
+
+  const busy = isProcessing || isUploading || sessionProcessing;
 
   /**
    * Derive image preview:
@@ -387,6 +456,198 @@ function ProfilePageContent() {
           </Button>
         </div>
       </form>
+
+      {/* ── Active Sessions ───────────────────────────────────── */}
+      <Card className="mt-6">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              Active Sessions
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Manage your active sessions on other devices
+            </p>
+          </div>
+          {sessions.length > 1 && (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleRevokeAllOthers}
+              disabled={busy}
+            >
+              <ShieldAlert className="h-4 w-4 mr-2" />
+              Revoke All Others
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {loadingSessions ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : sessions.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No active sessions found.
+            </p>
+          ) : (
+            <div className="divide-y divide-border border-t border-border mt-2">
+              {sessions.map((session) => {
+                const isCurrent = session.id === user?.currentSessionId;
+                const DeviceIcon =
+                  session.device_type === "mobile"
+                    ? Smartphone
+                    : session.device_type === "tablet"
+                      ? Tablet
+                      : Monitor;
+
+                // Format location details if available
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const loc = session.ip_location as any;
+                const locationStr =
+                  loc && (loc.city || loc.country)
+                    ? `${loc.city || ""}${loc.city && loc.country ? ", " : ""}${loc.country || ""}`
+                    : null;
+
+                return (
+                  <div
+                    key={session.id}
+                    className="flex items-center justify-between py-4"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="p-2 bg-muted rounded-lg text-muted-foreground">
+                        <DeviceIcon className="h-5 w-5" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">
+                            {session.browser_name || "Unknown Browser"}{" "}
+                            {session.browser_version || ""} on{" "}
+                            {session.os_name || "Unknown OS"}{" "}
+                            {session.os_version || ""}
+                          </span>
+                          {isCurrent && (
+                            <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-medium">
+                              Current Session
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="flex items-center gap-1">
+                            <Globe className="h-3 w-3" />
+                            {session.ip_address || "Unknown IP"}
+                            {locationStr && ` (${locationStr})`}
+                          </span>
+                          <span className="text-muted-foreground/60">•</span>
+                          <span>
+                            Started:{" "}
+                            {new Date(session.created_at).toLocaleString()}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    {!isCurrent && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => handleRevokeSession(session.id)}
+                        disabled={busy}
+                        title="Revoke session"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Confirm Revoke Single Session Modal ────────────────── */}
+      <Dialog
+        open={sessionToRevoke !== null}
+        onOpenChange={(open) => !open && setSessionToRevoke(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-destructive" />
+              Revoke Active Session
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to revoke this active session? The
+              associated device will be immediately signed out of the
+              application.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4 gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setSessionToRevoke(null)}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              type="button"
+              onClick={() => {
+                if (sessionToRevoke) {
+                  executeRevokeSession(sessionToRevoke);
+                }
+              }}
+              disabled={busy}
+            >
+              Revoke Session
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Confirm Revoke All Other Sessions Modal ────────────── */}
+      <Dialog
+        open={confirmRevokeAllOthers}
+        onOpenChange={setConfirmRevokeAllOthers}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-destructive" />
+              Revoke All Other Sessions
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to revoke all other active sessions? All
+              other devices will be signed out immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4 gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setConfirmRevokeAllOthers(false)}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              type="button"
+              onClick={() => {
+                executeRevokeAllOthers();
+              }}
+              disabled={busy}
+            >
+              Revoke All Other Sessions
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

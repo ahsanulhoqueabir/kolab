@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { jt } from "@/config/env.config";
 import type { JwtPayload } from "@/types/business/user.types";
 import { AuthCondition, JwtVerifyResult } from "@/types/business/auth.types";
-import { ProfileService } from "@/services/profile.service";
+import { AuthSessionService } from "@/services/auth-sessions.service";
 
 const encoder = new TextEncoder();
 
@@ -115,15 +115,40 @@ export async function verifyToken(
       };
     }
 
-    if (!decoded.profile || typeof decoded.email !== "string") {
+    if (!decoded.session || typeof decoded.email !== "string") {
       console.error("[JWT] Token payload missing required fields:", {
-        hasProfile: !!decoded.profile,
+        hasSession: !!decoded.session,
         emailType: typeof decoded.email,
       });
       return {
         valid: false,
         error: "Invalid token payload",
         errorType: "INVALID_TOKEN",
+      };
+    }
+
+    // Fetch and validate session with profile + role + permissions in a single DB call
+    const sessionResult = await AuthSessionService.validateAndGetSession(
+      decoded.session,
+    );
+
+    if (!sessionResult.success) {
+      const isExpired = sessionResult.error === "Session has expired";
+      return {
+        valid: false,
+        error: sessionResult.error || "Session is invalid or expired",
+        errorType: isExpired ? "INVALID_TOKEN" : "PERMISSION_DENIED",
+      };
+    }
+
+    const sessionData = sessionResult.data;
+    const profile = sessionData.profile;
+
+    if (!profile) {
+      return {
+        valid: false,
+        error: "Profile not found for this session",
+        errorType: "PERMISSION_DENIED",
       };
     }
 
@@ -138,48 +163,27 @@ export async function verifyToken(
               .map((p) => p.trim())
               .filter(Boolean);
 
-    // No permission required — return early (profile status NOT checked)
+    const roleObj = profile.role;
+    const roleId = roleObj?.id || "";
+
+    // No permission required — return early
     if (permList.length === 0) {
       return {
         valid: true,
         user: {
-          profile: decoded.profile,
-          email: decoded.email,
-          role: decoded.role || "",
+          profile: profile.id,
+          email: profile.email,
+          role: roleId,
+          session: decoded.session,
         },
       };
     }
 
-    // Fetch profile with role + permissions in a single DB call
-    const profileResult = await ProfileService.permissions(decoded.profile);
-
-    if (!profileResult.success) {
-      return {
-        valid: false,
-        error: profileResult.error || "Profile not found",
-        errorType: "PERMISSION_DENIED",
-      };
-    }
-
-    if (!profileResult.data) {
-      return {
-        valid: false,
-        error: "Profile data not found",
-        errorType: "PERMISSION_DENIED",
-      };
-    }
-
-    // Check profile status
-    if (!profileResult.data.active) {
-      return {
-        valid: false,
-        error: "Account is inactive or suspended",
-        errorType: "PROFILE_INACTIVE",
-      };
-    }
+    const userPermissions: string[] =
+      roleObj?.permissions?.map((p: { name: string }) => p.name) ?? [];
 
     // Resolve scope against the whitelist
-    const scope = resolveScope(profileResult.data.permissions, permList);
+    const scope = resolveScope(userPermissions, permList);
 
     if (!scope.granted) {
       return {
@@ -193,9 +197,10 @@ export async function verifyToken(
       valid: true,
       conditions: scope.conditions,
       user: {
-        profile: decoded.profile,
-        email: decoded.email,
-        role: profileResult.data.roleId,
+        profile: profile.id,
+        email: profile.email,
+        role: roleId,
+        session: decoded.session,
       },
     };
   } catch (error) {

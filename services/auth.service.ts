@@ -3,6 +3,8 @@ import { signJwt } from "@/lib/api/jwt.helper";
 import { hashPassword, verifyPassword } from "@/lib/api/argon2.helper";
 import type { JwtPayload, LoginParams } from "@/types/business/user.types";
 import { ProfileService } from "./profile.service";
+import { AuthSessionService } from "./auth-sessions.service";
+import type { AuthSessionFormData } from "@/types/db/auth-session.types";
 
 export class AuthService {
   /**
@@ -31,7 +33,10 @@ export class AuthService {
    * Authenticate a user with email and password.
    * Returns a JWT token and user profile data on success.
    */
-  static async login(params: LoginParams) {
+  static async login(
+    params: LoginParams,
+    metadata: Partial<AuthSessionFormData> = {},
+  ) {
     try {
       // Use ProfileService instead of querying profile table directly
       const profileResult = await ProfileService.getByEmailWithPassword(
@@ -60,19 +65,31 @@ export class AuthService {
         return error("Invalid email or password");
       }
 
-      // Sign JWT token
-      const roleStr =
-        typeof profile.role === "string"
-          ? profile.role
-          : (profile.role as any)?.id || "";
+      // Create new session in auth_sessions table
+      const sessionResult = await AuthSessionService.createSession(profile.id, {
+        ...metadata,
+        auth_method: "password",
+      });
 
+      if (!sessionResult.success) {
+        return error(sessionResult.error || "Failed to create session");
+      }
+
+      const session = sessionResult.data;
+
+      // Sign JWT token using the session ID and email
       const jwtPayload: JwtPayload = {
-        profile: profile.id,
+        session: session.id,
         email: profile.email,
-        role: roleStr,
       };
 
       const token = await signJwt(jwtPayload);
+
+      const roleStr =
+        typeof profile.role === "string"
+          ? profile.role
+          : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (profile.role as any)?.id || "";
 
       return success({
         token,

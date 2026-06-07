@@ -15,6 +15,7 @@ export interface JwtVerifyResult {
     profile: string;
     email: string;
     role: string;
+    session: string;
   };
 }
 
@@ -24,6 +25,7 @@ export interface AuthenticatedUser {
   role: string;
   conditions?: AuthCondition;
   permissions?: string[];
+  session?: string;
 }
 
 export type AuthConfig = {
