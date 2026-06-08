@@ -5,8 +5,8 @@ interface CreatePageHeaderProps {
   title: string;
   description?: string;
   onDiscard: () => void;
-  onSaveAndReturn: (e: React.FormEvent) => void;
-  onSave: (e: React.FormEvent) => void;
+  onSaveAndReturn: () => void;
+  onSave: () => void;
   isSubmitting: boolean;
   disabled?: boolean;
 }

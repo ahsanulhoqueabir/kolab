@@ -47,8 +47,8 @@ interface RoleFormInitialData {
 export interface RoleFormSubmitData {
   name: string;
   landing_page?: string;
-  permission: { name: string }[];
-  page: { url: string }[];
+  permissions: { name: string }[];
+  pages: { url: string }[];
 }
 
 interface RoleFormProps {
@@ -115,7 +115,12 @@ export function RoleForm({
     [],
   );
 
+  const formRef = useRef<HTMLFormElement>(null);
+
   const handleDiscard = () => router.push(returnTo);
+
+  const handleSaveAndReturn = () => formRef.current?.requestSubmit();
+  const handleSave = () => formRef.current?.requestSubmit();
 
   const onFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,14 +139,11 @@ export function RoleForm({
       onSubmit({
         name: data.name,
         landing_page: data.landing_page || undefined,
-        permission: uniquePermissions.map((perm) => ({ name: perm })),
-        page: uniquePages.map((url) => ({ url })),
+        permissions: uniquePermissions.map((perm) => ({ name: perm })),
+        pages: uniquePages.map((url) => ({ url })),
       });
     })();
   };
-
-  const handleSaveAndReturn = onFormSubmit;
-  const handleSave = onFormSubmit;
 
   return (
     <div>
@@ -160,7 +162,12 @@ export function RoleForm({
         disabled={!canSubmit}
       />
 
-      <form id="role-form" onSubmit={onFormSubmit} className="space-y-6 mb-10">
+      <form
+        ref={formRef}
+        id="role-form"
+        onSubmit={onFormSubmit}
+        className="space-y-6 mb-10"
+      >
         {/* Section 1 — Basic Info */}
         <Card>
           <CardContent className="pt-6">
