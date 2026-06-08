@@ -180,13 +180,11 @@ export function UserForm({
 
   const handleDiscard = () => router.push(returnTo);
 
-  const handleSaveAndReturn = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveAndReturn = () => {
     handleSubmit(handleFormSubmit)();
   };
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = () => {
     handleSubmit(handleFormSubmit)();
   };
 
