@@ -3,6 +3,7 @@ import { ok, fail } from "@/lib/api/api-response";
 import { AuthService } from "@/services/auth.service";
 import { signJwt } from "@/lib/api/jwt.helper";
 import type { JwtPayload } from "@/types/business/user.types";
+import { AuthSessionService } from "@/services/auth-sessions.service";
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,12 +24,27 @@ export async function POST(request: NextRequest) {
 
     const user = signUpResult.data.user;
     const roleStr =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       typeof user.role === "string" ? user.role : (user.role as any)?.id || "";
 
+    // Parse user agent and metadata using AuthSessionService helper
+    const metadata = await AuthSessionService.extractSessionMetadata(request);
+
+    // Create session in database
+    const sessionResult = await AuthSessionService.createSession(
+      user.id,
+      metadata,
+    );
+    if (!sessionResult.success) {
+      return fail({ error: sessionResult.error || "Failed to create session" });
+    }
+
+    const session = sessionResult.data;
+
+    // Sign JWT token using the session ID and email
     const jwtPayload: JwtPayload = {
-      profile: user.id,
+      session: session.id,
       email: user.email,
-      role: roleStr,
     };
 
     const token = await signJwt(jwtPayload);

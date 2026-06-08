@@ -17,14 +17,31 @@ import {
   UserCog,
   Settings,
   User,
+  ChevronsUpDown,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/auth.store";
+import type { StoredAccount } from "@/store/auth.store";
 import { siteConfig } from "@/config/site.config";
 import type { NavItem } from "@/config/site.config";
 import { ElementType, useCallback, useState } from "react";
 import Image from "next/image";
+import {
+  Avatar,
+  AvatarImage,
+  AvatarFallback,
+} from "@/components/core/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/core/ui/dropdown-menu";
+import { LogoutSwitchModal } from "./LogoutSwitchModal";
 
 /** Map icon name strings from site config to actual Lucide components */
 const ICON_MAP: Record<string, ElementType> = {
@@ -40,7 +57,6 @@ const ICON_MAP: Record<string, ElementType> = {
 };
 
 const NAV_ITEMS = siteConfig.nav.main as unknown as NavItem[];
-const BOTTOM_ITEMS = siteConfig.nav.bottom as unknown as NavItem[];
 
 interface SidebarProps {
   collapsed: boolean;
@@ -57,7 +73,13 @@ export function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
-  const { user, pages, logout } = useAuthStore();
+  const { user, accounts, switchAccount, logoutCurrent, logout, pages } =
+    useAuthStore();
+
+  const [logoutSwitchOpen, setLogoutSwitchOpen] = useState(false);
+  const [remainingAccountsForLogout, setRemainingAccountsForLogout] = useState<
+    StoredAccount[]
+  >([]);
   /** Compute which groups should be auto-expanded based on the current pathname */
   const computeInitialExpanded = useCallback(() => {
     const initial: Record<string, boolean> = {};
@@ -118,8 +140,27 @@ export function Sidebar({
   };
 
   const handleLogout = () => {
+    if (!user) return;
+    const remaining = accounts.filter((acc) => acc.user.id !== user.id);
+    if (remaining.length === 0) {
+      logout();
+      window.location.href = "/login";
+    } else if (remaining.length === 1) {
+      logoutCurrent(remaining[0].user.id);
+    } else {
+      setRemainingAccountsForLogout(remaining);
+      setLogoutSwitchOpen(true);
+    }
+  };
+
+  const handleLogoutAll = () => {
     logout();
     window.location.href = "/login";
+  };
+
+  const handleLogoutConfirm = (nextUserId: string) => {
+    logoutCurrent(nextUserId);
+    setLogoutSwitchOpen(false);
   };
 
   return (
@@ -151,6 +192,9 @@ export function Sidebar({
                 width={24}
               />
               <span>Kolab</span>
+              <span className="ml-0.5 rounded-md border border-sidebar-border/60 bg-sidebar-accent/50 px-1.5 py-0.5 text-[10px] font-medium text-sidebar-foreground/60 leading-none">
+                V1.0
+              </span>
             </Link>
           )}
           <Button
@@ -302,47 +346,210 @@ export function Sidebar({
           })}
         </nav>
 
-        {/* Bottom section */}
-        <div className="border-t border-sidebar-border py-2 px-2 space-y-1">
-          {BOTTOM_ITEMS.filter((item) => hasPageAccess(item.pageUrl)).map(
-            (item) => (
-              <SidebarItem
-                key={item.href}
-                item={item}
-                collapsed={collapsed}
-                mobileOpen={mobileOpen}
-                isActive={isActive(item.href || "")}
-                onMobileClose={onMobileClose}
-              />
-            ),
-          )}
-          {collapsed && !mobileOpen ? (
-            <button
-              onClick={handleLogout}
-              className="flex items-center justify-center w-full py-2 text-sidebar-foreground/60 hover:text-sidebar-foreground"
-              title="Logout"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          ) : (
-            <div className="px-3 py-2 space-y-2">
-              <div className="flex items-center gap-2 text-sm text-sidebar-foreground/80">
-                <User className="h-4 w-4" />
-                <span className="truncate">{user?.name || "User"}</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="w-full justify-start text-sidebar-foreground/60 hover:text-sidebar-foreground text-xs"
+        {/* Version badge — collapsed state */}
+        {collapsed && !mobileOpen && (
+          <div className="border-t border-sidebar-border py-2 flex justify-center">
+            <span className="text-[10px] font-medium text-sidebar-foreground/40 px-1 py-0.5 rounded border border-sidebar-border/40">
+              V1.0
+            </span>
+          </div>
+        )}
+
+        {/* Bottom section: Premium Profile Dropdown Menu */}
+        {user && (
+          <div className="border-t border-sidebar-border py-3 px-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                {collapsed && !mobileOpen ? (
+                  <button className="flex h-10 w-full items-center justify-center rounded-xl transition-all duration-200 hover:bg-sidebar-accent/50 active:scale-95 cursor-pointer">
+                    <Avatar className="h-8 w-8 border border-sidebar-border shadow-sm">
+                      <AvatarImage src={user.image ?? ""} alt={user.name} />
+                      <AvatarFallback className="bg-sidebar-accent text-sidebar-foreground text-xs font-semibold">
+                        {user.name
+                          ? user.name
+                              .split(" ")
+                              .filter(Boolean)
+                              .map((n) => n[0])
+                              .join("")
+                              .toUpperCase()
+                              .slice(0, 2)
+                          : "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                ) : (
+                  <button className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-all duration-200 hover:bg-sidebar-accent/50 active:scale-[0.98] cursor-pointer">
+                    <Avatar className="h-9 w-9 border border-sidebar-border shadow-sm">
+                      <AvatarImage src={user.image ?? ""} alt={user.name} />
+                      <AvatarFallback className="bg-sidebar-accent text-sidebar-foreground text-xs font-semibold">
+                        {user.name
+                          ? user.name
+                              .split(" ")
+                              .filter(Boolean)
+                              .map((n) => n[0])
+                              .join("")
+                              .toUpperCase()
+                              .slice(0, 2)
+                          : "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-1 flex-col min-w-0">
+                      <span className="text-sm font-semibold truncate text-sidebar-foreground">
+                        {user.name}
+                      </span>
+                      <span className="text-[11px] font-medium text-sidebar-foreground/50 truncate leading-none mt-0.5">
+                        {user.roleName || user.role}
+                      </span>
+                    </div>
+                    <ChevronsUpDown className="h-3.5 w-3.5 text-sidebar-foreground/45 shrink-0" />
+                  </button>
+                )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side={collapsed && !mobileOpen ? "right" : "top"}
+                align="end"
+                className="w-56 p-1.5 rounded-xl border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-lg"
               >
-                <LogOut className="h-3.5 w-3.5 mr-1.5" />
-                Logout
-              </Button>
-            </div>
-          )}
-        </div>
+                <div className="px-2.5 py-2">
+                  <p className="text-xs font-medium text-sidebar-foreground/40 leading-none">
+                    Signed in as
+                  </p>
+                  <p className="text-sm font-semibold truncate mt-1">
+                    {user.name}
+                  </p>
+                  <p className="text-xs text-sidebar-foreground/50 truncate mt-0.5 font-mono">
+                    {user.email}
+                  </p>
+                </div>
+                <DropdownMenuSeparator className="bg-sidebar-border" />
+
+                {/* Independent Pages Inside Dropdown */}
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/profile"
+                    onClick={onMobileClose}
+                    className="flex w-full cursor-default select-none items-center rounded-lg px-2 py-1.5 text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  >
+                    <User className="h-4 w-4 mr-2.5 opacity-60" />
+                    <span>My Profile</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/settings"
+                    onClick={onMobileClose}
+                    className="flex w-full cursor-default select-none items-center rounded-lg px-2 py-1.5 text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  >
+                    <Settings className="h-4 w-4 mr-2.5 opacity-60" />
+                    <span>Settings</span>
+                  </Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="bg-sidebar-border" />
+
+                {/* Switch Account Section */}
+                {accounts.length > 1 && (
+                  <>
+                    <DropdownMenuLabel className="px-2.5 py-1 text-[10px] font-semibold tracking-wider text-sidebar-foreground/40 uppercase">
+                      Switch Account
+                    </DropdownMenuLabel>
+                    <div className="max-h-35 overflow-y-auto space-y-0.5 px-0.5">
+                      {accounts
+                        .filter((acc) => acc.user.id !== user.id)
+                        .map((acc) => (
+                          <DropdownMenuItem
+                            key={acc.user.id}
+                            onClick={() => switchAccount(acc.user.id)}
+                            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors cursor-default hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          >
+                            <Avatar className="h-5 w-5 shrink-0 border border-sidebar-border/40">
+                              <AvatarImage src={acc.user.image ?? ""} />
+                              <AvatarFallback className="bg-sidebar-accent text-sidebar-foreground text-[8px] font-bold">
+                                {acc.user.name
+                                  ? acc.user.name
+                                      .split(" ")
+                                      .filter(Boolean)
+                                      .map((n) => n[0])
+                                      .join("")
+                                      .toUpperCase()
+                                      .slice(0, 2)
+                                  : "U"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold truncate">
+                                {acc.user.name}
+                              </p>
+                              <p className="text-[9px] text-sidebar-foreground/50 truncate leading-none mt-0.5">
+                                {acc.user.roleName || acc.user.role}
+                              </p>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                    </div>
+                    <DropdownMenuSeparator className="bg-sidebar-border" />
+                  </>
+                )}
+
+                {/* Add Account */}
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/login"
+                    onClick={onMobileClose}
+                    className="flex w-full cursor-default select-none items-center rounded-lg px-2 py-1.5 text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  >
+                    <Plus className="h-4 w-4 mr-2.5 opacity-60" />
+                    <span>Add Account</span>
+                  </Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="bg-sidebar-border" />
+
+                {/* Logout Actions */}
+                {accounts.length > 1 ? (
+                  <>
+                    <DropdownMenuItem
+                      onClick={handleLogout}
+                      className="flex cursor-default select-none items-center rounded-lg px-2 py-1.5 text-sm outline-none text-red-500 hover:bg-red-500/10 hover:text-red-600 focus:bg-red-500/10 focus:text-red-600"
+                    >
+                      <LogOut className="h-4 w-4 mr-2.5 shrink-0" />
+                      <span className="truncate">
+                        Logout {user.name.split(" ")[0]}
+                      </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleLogoutAll}
+                      className="flex cursor-default select-none items-center rounded-lg px-2 py-1.5 text-sm outline-none text-red-500 hover:bg-red-500/15 hover:text-red-600 focus:bg-red-500/15 focus:text-red-600 font-semibold"
+                    >
+                      <LogOut className="h-4 w-4 mr-2.5 shrink-0" />
+                      <span>Logout All Accounts</span>
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    className="flex cursor-default select-none items-center rounded-lg px-2 py-1.5 text-sm outline-none text-red-500 hover:bg-red-500/10 hover:text-red-600 focus:bg-red-500/10 focus:text-red-600"
+                  >
+                    <LogOut className="h-4 w-4 mr-2.5 shrink-0" />
+                    <span>Logout</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </aside>
+
+      {/* Logout switcher modal for multiple remaining accounts */}
+      {user && (
+        <LogoutSwitchModal
+          open={logoutSwitchOpen}
+          onOpenChange={setLogoutSwitchOpen}
+          accounts={remainingAccountsForLogout}
+          onSelect={handleLogoutConfirm}
+          onCancel={() => setLogoutSwitchOpen(false)}
+        />
+      )}
     </>
   );
 }

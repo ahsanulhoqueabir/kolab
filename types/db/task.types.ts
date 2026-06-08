@@ -43,6 +43,7 @@ export interface CreateTaskParams {
   priority: TaskPriority;
   status?: TaskStatus;
   project: string;
+  attachment?: string[];
 }
 
 export interface UpdateTaskParams {

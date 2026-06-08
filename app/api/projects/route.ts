@@ -52,8 +52,10 @@ export const POST = withAuth({ permissions: "project:create" })(async ({
       return fail({ error: "PROJECT_CREATE_BAD_REQUEST" });
     }
 
+    // Attachments are already public URLs (client uploads directly to R2)
     const result = await ProjectService.create({
       ...body,
+      attachment: body.attachment?.length ? body.attachment : undefined,
       created_by: user.profile,
     });
 

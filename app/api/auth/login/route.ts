@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/api-response";
 import { AuthService } from "@/services/auth.service";
+import { AuthSessionService } from "@/services/auth-sessions.service";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,8 +13,11 @@ export async function POST(request: NextRequest) {
       return fail({ error: "Email and password are required" });
     }
 
+    // Parse user agent and metadata using AuthSessionService helper
+    const metadata = await AuthSessionService.extractSessionMetadata(request);
+
     // Authenticate user
-    const result = await AuthService.login({ email, password });
+    const result = await AuthService.login({ email, password }, metadata);
 
     if (!result.success) {
       return fail({ error: result.error, statusCode: 401 });

@@ -1,7 +1,6 @@
 import { getSupabaseServerClient } from "@/lib/api/supabase";
 import { success, error } from "@/lib/api/api-response";
 import { LogService } from "@/services/log.service";
-import { R2Service } from "@/services/r2.service";
 import { TeamService } from "@/services/team.service";
 import { paginated } from "@/lib/pagination";
 import { dbTimestamp } from "@/lib/date.utils";
@@ -29,11 +28,6 @@ export class ProjectService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // Process base64 attachments → upload to R2 → get URLs
-      const processedAttachments = params.attachment
-        ? await R2Service.processAttachments(params.attachment, "projects")
-        : [];
-
       const { data, error: sbError } = await supabase
         .from(this.collection)
         .insert({
@@ -42,7 +36,7 @@ export class ProjectService {
           description: params.description || null,
           deadline: params.deadline || null,
           status: params.status || "DRAFT",
-          attachment: processedAttachments,
+          attachment: params.attachment || null,
           created_by: params.created_by,
           created_at: dbTimestamp(),
           updated_at: dbTimestamp(),
@@ -251,11 +245,6 @@ export class ProjectService {
     try {
       const supabase = getSupabaseServerClient();
 
-      // Process base64 attachments → upload to R2 → get URLs
-      const processedAttachments = params.attachment
-        ? await R2Service.processAttachments(params.attachment, "projects")
-        : undefined;
-
       const updateData: Record<string, unknown> = {
         updated_at: dbTimestamp(),
       };
@@ -265,8 +254,8 @@ export class ProjectService {
         updateData.description = params.description;
       if (params.deadline !== undefined) updateData.deadline = params.deadline;
       if (params.status !== undefined) updateData.status = params.status;
-      if (processedAttachments !== undefined)
-        updateData.attachment = processedAttachments;
+      if (params.attachment !== undefined)
+        updateData.attachment = params.attachment;
       if (params.updated_by !== undefined)
         updateData.updated_by = params.updated_by;
 

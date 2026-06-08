@@ -272,7 +272,7 @@ export class TeamService {
   }
 
   /**
-   * Get workload summary per member.
+   * Get workload summary per member (deduplicated by profile).
    * If projectId is provided, scoped to that project.
    */
   static async getWorkload(
@@ -300,9 +300,24 @@ export class TeamService {
         return success([]);
       }
 
-      // For each member, count their tasks
+      // Deduplicate by profile id — same profile may appear in multiple projects/entries
+      const seenProfiles = new Set<string>();
+      const uniqueMembers: Record<string, unknown>[] = [];
+      for (const member of members as Record<string, unknown>[]) {
+        const profileId =
+          typeof member.profile === "object" && member.profile !== null
+            ? (member.profile as Record<string, string>).id
+            : (member.profile as string);
+
+        if (!seenProfiles.has(profileId)) {
+          seenProfiles.add(profileId);
+          uniqueMembers.push(member);
+        }
+      }
+
+      // For each unique member, count their tasks
       const workloadItems: WorkloadItem[] = await Promise.all(
-        members.map(async (member: Record<string, unknown>) => {
+        uniqueMembers.map(async (member: Record<string, unknown>) => {
           const profileId =
             typeof member.profile === "object" && member.profile !== null
               ? (member.profile as Record<string, string>).id

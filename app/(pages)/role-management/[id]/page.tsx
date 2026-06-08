@@ -74,8 +74,8 @@ function EditRolePageContent() {
         id: roleId,
         name: data.name,
         landing_page: data.landing_page,
-        permission: data.permission,
-        page: data.page,
+        permissions: data.permissions,
+        pages: data.pages,
       });
 
       if (result.success) {

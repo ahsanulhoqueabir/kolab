@@ -6,7 +6,6 @@ import {
   AvatarImage,
 } from "@/components/core/ui/avatar";
 import { Button } from "@/components/ui/button";
-
 interface UserListCardProps {
   user: {
     id: string | number;
@@ -27,7 +26,7 @@ export function UserListCard({ user, onEdit, onDelete }: UserListCardProps) {
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10">
             {user.image ? (
-              <AvatarImage src={user.image} alt={user.name} />
+              <AvatarImage src={user.image ?? ""} alt={user.name} />
             ) : (
               <AvatarFallback>
                 <User className="h-5 w-5 text-muted-foreground" />

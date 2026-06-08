@@ -68,6 +68,7 @@ export function withAuth(config?: AuthConfig) {
           email: result.user.email,
           role: result.user.role,
           conditions: result.conditions,
+          session: result.user.session,
         };
 
         // Optionally fetch and attach full permission list

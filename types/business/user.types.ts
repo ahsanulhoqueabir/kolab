@@ -1,7 +1,6 @@
 export interface JwtPayload {
-  profile: string;
+  session: string;
   email: string;
-  role: string;
 }
 
 export interface LoginParams {
@@ -22,8 +21,10 @@ export interface AuthUser {
   phone?: string | null;
   image?: string | null;
   role: string;
+  roleName?: string;
   permissions?: string[];
   pages?: string[];
+  currentSessionId?: string;
 }
 
 export interface Profile {

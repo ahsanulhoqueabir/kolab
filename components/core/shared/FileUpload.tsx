@@ -32,6 +32,8 @@ export function FileUpload({
 }: FileUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const queuedFiles = useUploadStore((s) => s.queuedFiles);
+  const isUploading = useUploadStore((s) => s.isUploading);
+  const uploadProgress = useUploadStore((s) => s.uploadProgress);
   const queueFiles = useUploadStore((s) => s.queueFiles);
   const removeFile = useUploadStore((s) => s.removeFile);
 
@@ -43,7 +45,7 @@ export function FileUpload({
     [value, onChange],
   );
 
-  // ── Handle file selection — convert to base64 & queue ───────────────
+  // ── Handle file selection — queue files for signed-URL upload ──────
   const handleFilesSelected = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
@@ -97,8 +99,50 @@ export function FileUpload({
         />
       </div>
 
-      {/* Queued files (base64, not yet uploaded) */}
-      {queuedFiles.length > 0 && (
+      {/* Upload progress bar */}
+      {isUploading && (
+        <div className="space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <svg
+                className="h-4 w-4 animate-spin text-primary"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              <span className="text-sm font-medium">
+                Uploading files… {uploadProgress}%
+              </span>
+            </div>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {uploadProgress}%
+            </span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-primary/10">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Queued files (not yet uploaded) */}
+      {!isUploading && queuedFiles.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs font-medium text-muted-foreground">
             New files to upload ({queuedFiles.length})

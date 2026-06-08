@@ -12,7 +12,9 @@ import { CreatePageHeader } from "@/components/core/shared/CreatePageHeader";
 import { useReturnUrl } from "@/hooks/use-return-url";
 import { SearchComboBox } from "@/components/core/shared/SearchComboBox";
 import { DatePicker } from "@/components/core/ui/date-picker";
+import { FileUpload } from "@/components/core/shared/FileUpload";
 import { useAuthStore } from "@/store/auth.store";
+import { useUploadStore } from "@/store/upload.store";
 import {
   TASK_DEFAULT_VALUES,
   PRIORITY_OPTIONS,
@@ -47,6 +49,11 @@ export function TaskForm({
   const router = useRouter();
   const { returnTo } = useReturnUrl("/tasks");
   const isEdit = mode === "edit";
+  const queuedFiles = useUploadStore((s) => s.queuedFiles);
+  const isUploading = useUploadStore((s) => s.isUploading);
+  const uploadAndGetUrls = useUploadStore((s) => s.uploadAndGetUrls);
+  const clearUploadFiles = useUploadStore((s) => s.clearFiles);
+  const busy = isSubmitting || isUploading;
 
   const { permissions } = useAuthStore();
   const canCreateProject = permissions.includes("project:create");
@@ -78,14 +85,21 @@ export function TaskForm({
   }, [users]);
 
   const priorityOptions = useMemo(() => {
-    return PRIORITY_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }));
+    return PRIORITY_OPTIONS.map((opt) => ({
+      value: opt.value,
+      label: opt.label,
+    }));
   }, []);
 
   const statusOptions = useMemo(() => {
-    return STATUS_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }));
+    return STATUS_OPTIONS.map((opt) => ({
+      value: opt.value,
+      label: opt.label,
+    }));
   }, []);
 
   const dueDateValue = useWatch({ control, name: "due_date" });
+  const attachmentValue = useWatch({ control, name: "attachment" });
   const dueDate = useMemo(() => {
     if (!dueDateValue) return undefined;
     const d = new Date(dueDateValue);
@@ -98,6 +112,10 @@ export function TaskForm({
     });
   };
 
+  const handleAttachmentChange = (urls: string[]) => {
+    setValue("attachment", urls, { shouldDirty: true });
+  };
+
   useEffect(() => {
     if (initialData) {
       setValue("title", initialData.title);
@@ -107,10 +125,21 @@ export function TaskForm({
       setValue("due_date", initialData.due_date || "");
       setValue("priority", initialData.priority);
       setValue("status", initialData.status || "TODO");
+      setValue("attachment", initialData.attachment || []);
     }
   }, [initialData, setValue]);
 
   const handleFormSubmit = async (data: CreateTaskParams) => {
+    // Upload queued files via signed URLs
+    let uploadedUrls: string[] = [];
+    if (queuedFiles.length > 0) {
+      uploadedUrls = await uploadAndGetUrls("tasks");
+    }
+
+    const allAttachments = [...(data.attachment || []), ...uploadedUrls];
+
+    clearUploadFiles();
+
     await onSubmit({
       title: data.title,
       description: data.description || undefined,
@@ -119,10 +148,14 @@ export function TaskForm({
       due_date: data.due_date || undefined,
       priority: data.priority,
       status: data.status,
+      attachment: allAttachments.length > 0 ? allAttachments : undefined,
     });
   };
 
-  const handleDiscard = () => router.push(returnTo);
+  const handleDiscard = () => {
+    clearUploadFiles();
+    router.push(returnTo);
+  };
 
   const handleSaveAndReturn = (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,8 +180,8 @@ export function TaskForm({
         onDiscard={handleDiscard}
         onSaveAndReturn={handleSaveAndReturn}
         onSave={handleSave}
-        isSubmitting={isSubmitting}
-        disabled={!canSubmit}
+        isSubmitting={busy}
+        disabled={!canSubmit || busy}
       />
 
       <form
@@ -168,7 +201,7 @@ export function TaskForm({
                   {...register("title", TASK_VALIDATION_RULES.title)}
                   placeholder="Enter task title"
                   className={errors.title ? "border-destructive" : ""}
-                  disabled={isSubmitting}
+                  disabled={busy}
                 />
                 {errors.title && (
                   <p className="text-sm text-destructive">
@@ -184,7 +217,7 @@ export function TaskForm({
                   {...register("description")}
                   placeholder="Enter task description"
                   className="flex min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={isSubmitting}
+                  disabled={busy}
                 />
               </div>
 
@@ -201,7 +234,7 @@ export function TaskForm({
                       placeholder="Select a project"
                       searchPlaceholder="Search projects..."
                       emptyMessage="No projects found."
-                      disabled={isSubmitting}
+                      disabled={busy}
                       showCreate={canCreateProject}
                       createLabel="Create new project"
                       onCreateNew={() => router.push("/projects/create")}
@@ -213,7 +246,7 @@ export function TaskForm({
                       size="icon-sm"
                       onClick={() => router.push("/projects/create")}
                       title="Create new project"
-                      disabled={isSubmitting}
+                      disabled={busy}
                       className="shrink-0"
                     >
                       <Plus className="h-4 w-4" />
@@ -233,7 +266,7 @@ export function TaskForm({
                       placeholder="Select a member"
                       searchPlaceholder="Search members..."
                       emptyMessage="No members found."
-                      disabled={isSubmitting}
+                      disabled={busy}
                       showCreate={canCreateUser}
                       createLabel="Create new user"
                       onCreateNew={() => router.push("/users/create")}
@@ -245,7 +278,7 @@ export function TaskForm({
                       size="icon-sm"
                       onClick={() => router.push("/users/create")}
                       title="Create new user"
-                      disabled={isSubmitting}
+                      disabled={busy}
                       className="shrink-0"
                     >
                       <Plus className="h-4 w-4" />
@@ -265,7 +298,7 @@ export function TaskForm({
                   placeholder="Select priority"
                   searchPlaceholder="Search priority..."
                   emptyMessage="No priority options."
-                  disabled={isSubmitting}
+                  disabled={busy}
                 />
               </div>
 
@@ -276,7 +309,7 @@ export function TaskForm({
                   date={dueDate}
                   onDateChange={handleDueDateChange}
                   placeholder="Select due date"
-                  disabled={isSubmitting}
+                  disabled={busy}
                   disablePastDates
                   yearRange={{
                     from: new Date().getFullYear(),
@@ -297,10 +330,20 @@ export function TaskForm({
                     placeholder="Select status"
                     searchPlaceholder="Search status..."
                     emptyMessage="No status options."
-                    disabled={isSubmitting}
+                    disabled={busy}
                   />
                 </div>
               )}
+
+              {/* Attachments — full width */}
+              <div className="space-y-2 md:col-span-2">
+                <Label>Attachments</Label>
+                <FileUpload
+                  value={attachmentValue || []}
+                  onChange={handleAttachmentChange}
+                  disabled={busy}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>

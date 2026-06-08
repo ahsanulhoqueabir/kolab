@@ -41,7 +41,10 @@ export function ProjectForm({
   const { returnTo } = useReturnUrl("/projects");
   const isEdit = mode === "edit";
   const queuedFiles = useUploadStore((s) => s.queuedFiles);
+  const isUploading = useUploadStore((s) => s.isUploading);
+  const uploadAndGetUrls = useUploadStore((s) => s.uploadAndGetUrls);
   const clearUploadFiles = useUploadStore((s) => s.clearFiles);
+  const busy = isSubmitting || isUploading;
 
   const {
     register,
@@ -86,16 +89,20 @@ export function ProjectForm({
     }
   }, [initialData, setValue]);
 
-  // ── Merge queued base64 files into attachment, then submit ────────
+  // ── Upload queued files via signed URLs, then submit ──────────────
   const handleFormSubmit = async (data: CreateProjectParams) => {
-    // Merge existing URLs + queued base64 files
-    const allAttachments = [
-      ...(data.attachment || []),
-      ...queuedFiles.map((qf) => qf.base64),
-    ];
+    // Step 1: Upload new files directly to R2 via signed URLs
+    let uploadedUrls: string[] = [];
+    if (queuedFiles.length > 0) {
+      uploadedUrls = await uploadAndGetUrls("projects");
+    }
+
+    // Step 2: Merge existing URLs + newly uploaded URLs
+    const allAttachments = [...(data.attachment || []), ...uploadedUrls];
 
     clearUploadFiles();
 
+    // Step 3: Submit form with only public URLs in attachment
     await onSubmit({
       name: data.name,
       description: data.description || undefined,
@@ -133,8 +140,8 @@ export function ProjectForm({
         onDiscard={handleDiscard}
         onSaveAndReturn={handleSaveAndReturn}
         onSave={handleSave}
-        isSubmitting={isSubmitting}
-        disabled={!canSubmit}
+        isSubmitting={busy}
+        disabled={!canSubmit || busy}
       />
 
       <form
@@ -154,7 +161,7 @@ export function ProjectForm({
                   {...register("name", PROJECT_VALIDATION_RULES.name)}
                   placeholder="Enter project name"
                   className={errors.name ? "border-destructive" : ""}
-                  disabled={isSubmitting}
+                  disabled={busy}
                 />
                 {errors.name && (
                   <p className="text-sm text-destructive">
@@ -170,7 +177,7 @@ export function ProjectForm({
                   {...register("description")}
                   placeholder="Enter project description"
                   className="flex min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={isSubmitting}
+                  disabled={busy}
                 />
               </div>
 
@@ -188,7 +195,7 @@ export function ProjectForm({
                   placeholder="Select status"
                   searchPlaceholder="Search status..."
                   emptyMessage="No status options found."
-                  disabled={isSubmitting}
+                  disabled={busy}
                 />
               </div>
 
@@ -199,7 +206,7 @@ export function ProjectForm({
                   date={deadlineDate}
                   onDateChange={handleDeadlineChange}
                   placeholder="Select deadline"
-                  disabled={isSubmitting}
+                  disabled={busy}
                   disablePastDates
                   yearRange={{
                     from: new Date().getFullYear(),
@@ -214,7 +221,7 @@ export function ProjectForm({
                 <FileUpload
                   value={attachmentValue || []}
                   onChange={handleAttachmentChange}
-                  disabled={isSubmitting}
+                  disabled={busy}
                 />
               </div>
             </div>

@@ -24,11 +24,14 @@ export function CentralDataInitializer() {
 
     hasInitialized.current = true;
 
-    const storedUser = useAuthStore.getState().user;
-    const storedToken = useAuthStore.getState().accessToken;
+    const state = useAuthStore.getState();
+    const storedToken = state.accessToken;
 
-    // Only call initAuth if we have a persisted token to validate
-    if (storedToken && storedUser) {
+    // If there's a persisted token, validate it via /api/auth/me.
+    // Also init if there are stored accounts (multi-account scenario)
+    // even if the current token seems missing — the accounts list
+    // may contain valid sessions we can fall back to.
+    if (storedToken || state.accounts.length > 0) {
       initAuth();
     }
   }, [hasHydrated, initAuth]);
