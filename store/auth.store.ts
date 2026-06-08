@@ -18,6 +18,9 @@ export interface StoredAccount {
   landingPage: string | null;
 }
 
+/** Maximum number of stored accounts allowed */
+const MAX_ACCOUNTS = 10;
+
 export interface AuthState {
   /** Authenticated user profile */
   user: AuthUser | null;
@@ -87,36 +90,37 @@ export const useAuthStore = create<AuthStore>()(
 
       /* ── Login ──────────────────────────────────────────────────── */
       login: async (params) => {
-        const previousState = get();
-        let updatedAccounts = [...previousState.accounts];
-        if (previousState.user && previousState.accessToken) {
-          const existsIdx = updatedAccounts.findIndex(
-            (acc) => acc.user.id === previousState.user!.id
-          );
-          const oldSession: StoredAccount = {
-            user: previousState.user,
-            accessToken: previousState.accessToken,
-            permissions: previousState.permissions,
-            pages: previousState.pages,
-            landingPage: previousState.landingPage,
-          };
-          if (existsIdx >= 0) {
-            updatedAccounts[existsIdx] = oldSession;
-          } else {
-            updatedAccounts.push(oldSession);
-          }
-        }
-
-        set({ isProcessing: true, error: null, accounts: updatedAccounts });
+        set({ isProcessing: true, error: null });
 
         try {
           const { data } = await api_client.post("/auth/login", params);
           const { user, token } = data.data;
 
-          // Set user + token first, then fetch full profile with permissions
+          // Save previous active account to accounts list before switching
+          const prevState = get();
+          const updatedAccounts = [...prevState.accounts];
+          if (prevState.user && prevState.accessToken) {
+            const existsIdx = updatedAccounts.findIndex(
+              (acc) => acc.user.id === prevState.user!.id,
+            );
+            const oldSession: StoredAccount = {
+              user: prevState.user,
+              accessToken: prevState.accessToken,
+              permissions: prevState.permissions,
+              pages: prevState.pages,
+              landingPage: prevState.landingPage,
+            };
+            if (existsIdx >= 0) {
+              updatedAccounts[existsIdx] = oldSession;
+            } else {
+              updatedAccounts.push(oldSession);
+            }
+          }
+
           set({
             user,
             accessToken: token,
+            accounts: updatedAccounts,
             isProcessing: false,
             error: null,
           });
@@ -136,36 +140,37 @@ export const useAuthStore = create<AuthStore>()(
 
       /* ── Sign Up ────────────────────────────────────────────────── */
       signUp: async (params) => {
-        const previousState = get();
-        let updatedAccounts = [...previousState.accounts];
-        if (previousState.user && previousState.accessToken) {
-          const existsIdx = updatedAccounts.findIndex(
-            (acc) => acc.user.id === previousState.user!.id
-          );
-          const oldSession: StoredAccount = {
-            user: previousState.user,
-            accessToken: previousState.accessToken,
-            permissions: previousState.permissions,
-            pages: previousState.pages,
-            landingPage: previousState.landingPage,
-          };
-          if (existsIdx >= 0) {
-            updatedAccounts[existsIdx] = oldSession;
-          } else {
-            updatedAccounts.push(oldSession);
-          }
-        }
-
-        set({ isProcessing: true, error: null, accounts: updatedAccounts });
+        set({ isProcessing: true, error: null });
 
         try {
           const { data } = await api_client.post("/auth/signup", params);
           const { user, token } = data.data;
 
-          // Set user + token first, then fetch full profile with permissions
+          // Save previous active account to accounts list before switching
+          const prevState = get();
+          const updatedAccounts = [...prevState.accounts];
+          if (prevState.user && prevState.accessToken) {
+            const existsIdx = updatedAccounts.findIndex(
+              (acc) => acc.user.id === prevState.user!.id,
+            );
+            const oldSession: StoredAccount = {
+              user: prevState.user,
+              accessToken: prevState.accessToken,
+              permissions: prevState.permissions,
+              pages: prevState.pages,
+              landingPage: prevState.landingPage,
+            };
+            if (existsIdx >= 0) {
+              updatedAccounts[existsIdx] = oldSession;
+            } else {
+              updatedAccounts.push(oldSession);
+            }
+          }
+
           set({
             user,
             accessToken: token,
+            accounts: updatedAccounts,
             isProcessing: false,
             error: null,
           });
@@ -200,7 +205,9 @@ export const useAuthStore = create<AuthStore>()(
         const { user, accounts } = get();
         if (!user) return;
 
-        const remainingAccounts = accounts.filter((acc) => acc.user.id !== user.id);
+        const remainingAccounts = accounts.filter(
+          (acc) => acc.user.id !== user.id,
+        );
 
         if (remainingAccounts.length === 0) {
           // No other accounts left, do a full logout
@@ -219,7 +226,9 @@ export const useAuthStore = create<AuthStore>()(
         // Determine which account to switch to
         let targetAccount = remainingAccounts[0];
         if (nextUserId) {
-          const found = remainingAccounts.find((acc) => acc.user.id === nextUserId);
+          const found = remainingAccounts.find(
+            (acc) => acc.user.id === nextUserId,
+          );
           if (found) targetAccount = found;
         }
 
@@ -238,31 +247,14 @@ export const useAuthStore = create<AuthStore>()(
       /* ── Switch Account ─────────────────────────────────────────── */
       switchAccount: async (userId) => {
         const currentActive = get();
-        let updatedAccounts = [...currentActive.accounts];
 
-        // Save current active account first
-        if (currentActive.user && currentActive.accessToken) {
-          const existsIdx = updatedAccounts.findIndex(
-            (acc) => acc.user.id === currentActive.user!.id
-          );
-          const currentSession: StoredAccount = {
-            user: currentActive.user,
-            accessToken: currentActive.accessToken,
-            permissions: currentActive.permissions,
-            pages: currentActive.pages,
-            landingPage: currentActive.landingPage,
-          };
-          if (existsIdx >= 0) {
-            updatedAccounts[existsIdx] = currentSession;
-          } else {
-            updatedAccounts.push(currentSession);
-          }
-        }
-
-        const targetAccount = updatedAccounts.find((acc) => acc.user.id === userId);
+        // Find the target account from stored accounts
+        const targetAccount = currentActive.accounts.find(
+          (acc) => acc.user.id === userId,
+        );
         if (!targetAccount) return;
 
-        // Set token and status first to make sure api_client utilizes it
+        // Set token first so initAuth can use it
         set({
           accessToken: targetAccount.accessToken,
           isProcessing: true,
@@ -270,7 +262,10 @@ export const useAuthStore = create<AuthStore>()(
         });
 
         try {
-          // Re-initialize auth using target account token to refresh profile/permissions
+          // initAuth() now handles:
+          //   1. Saving the current active user to accounts (if different)
+          //   2. Upserting the new user in accounts
+          //   3. Fetching fresh profile/permissions from /api/auth/me
           await get().initAuth(targetAccount.accessToken);
         } catch (err) {
           set({ isProcessing: false, error: (err as Error).message });
@@ -333,33 +328,83 @@ export const useAuthStore = create<AuthStore>()(
           };
 
           // Update accounts list with the newly active user session
-          const currentAccounts = get().accounts;
-          const newSession: StoredAccount = {
-            user,
-            accessToken: accessToken,
-            permissions: (profile.permissions ?? []) as string[],
-            pages: (profile.pages ?? []) as string[],
-            landingPage: (roleData?.landing_page as string) || null,
-          };
+          // BUT: if the current user.id already matches, don't re-add —
+          // just update the active state fields. The accounts list should
+          // only be touched when we are switching between different users.
+          const currentState = get();
+          const currentAccounts = currentState.accounts;
 
-          const existsIdx = currentAccounts.findIndex(
-            (acc) => acc.user.id === user.id
-          );
-          let updatedAccounts = [...currentAccounts];
-          if (existsIdx >= 0) {
-            updatedAccounts[existsIdx] = newSession;
+          // Only update accounts list if the user actually changed
+          // (i.e. this is a switch, not just a refresh of the same user)
+          const isSameUser = currentState.user?.id === user.id;
+
+          if (!isSameUser) {
+            // Save the previous active user to accounts before switching
+            const updatedAccounts = [...currentAccounts];
+            if (currentState.user && currentState.accessToken) {
+              const prevSession: StoredAccount = {
+                user: currentState.user,
+                accessToken: currentState.accessToken,
+                permissions: currentState.permissions,
+                pages: currentState.pages,
+                landingPage: currentState.landingPage,
+              };
+              const existsPrevIdx = updatedAccounts.findIndex(
+                (acc) => acc.user.id === currentState.user!.id,
+              );
+              if (existsPrevIdx >= 0) {
+                updatedAccounts[existsPrevIdx] = prevSession;
+              } else {
+                updatedAccounts.push(prevSession);
+              }
+            }
+
+            // Upsert the new user in accounts
+            const existsIdx = updatedAccounts.findIndex(
+              (acc) => acc.user.id === user.id,
+            );
+            const newSession: StoredAccount = {
+              user,
+              accessToken: accessToken,
+              permissions: (profile.permissions ?? []) as string[],
+              pages: (profile.pages ?? []) as string[],
+              landingPage: (roleData?.landing_page as string) || null,
+            };
+            if (existsIdx >= 0) {
+              updatedAccounts[existsIdx] = newSession;
+            } else {
+              updatedAccounts.push(newSession);
+            }
+
+            set({
+              user,
+              permissions: (profile.permissions ?? []) as string[],
+              pages: (profile.pages ?? []) as string[],
+              landingPage: (roleData?.landing_page as string) || null,
+              accounts: updatedAccounts,
+              error: null,
+            });
           } else {
-            updatedAccounts.push(newSession);
-          }
+            // Same user — just refresh the active state, don't touch accounts.
+            // But do a light cleanup: remove any duplicate entries for this user
+            // and enforce the max accounts limit.
+            const currentAccounts = get().accounts;
+            const deduped = currentAccounts.filter(
+              (acc, idx, self) =>
+                acc.user.id !== user.id ||
+                idx === self.findIndex((a) => a.user.id === user.id),
+            );
+            const trimmed = deduped.slice(0, MAX_ACCOUNTS - 1);
 
-          set({
-            user,
-            permissions: (profile.permissions ?? []) as string[],
-            pages: (profile.pages ?? []) as string[],
-            landingPage: (roleData?.landing_page as string) || null,
-            accounts: updatedAccounts,
-            error: null,
-          });
+            set({
+              user,
+              permissions: (profile.permissions ?? []) as string[],
+              pages: (profile.pages ?? []) as string[],
+              landingPage: (roleData?.landing_page as string) || null,
+              accounts: trimmed,
+              error: null,
+            });
+          }
         } catch (err: unknown) {
           // Try to extract errorType from the failed response
           let errorType: string | undefined;
@@ -383,8 +428,29 @@ export const useAuthStore = create<AuthStore>()(
             errorMessage = err.message;
           }
 
-          // If the account is inactive, logout and show the specific error
+          // If the account is inactive — remove it from accounts and
+          // switch to another account if available
           if (errorType === "PROFILE_INACTIVE") {
+            const stateBeforeError = get();
+            const remainingAccounts = stateBeforeError.accounts.filter(
+              (acc) => acc.user.id !== stateBeforeError.user?.id,
+            );
+            if (remainingAccounts.length > 0) {
+              const nextAccount = remainingAccounts[0];
+              set({
+                user: nextAccount.user,
+                accessToken: nextAccount.accessToken,
+                permissions: nextAccount.permissions,
+                pages: nextAccount.pages,
+                landingPage: nextAccount.landingPage,
+                accounts: remainingAccounts,
+                hasHydrated: get().hasHydrated,
+                isProcessing: false,
+                error: errorMessage || "Account is inactive or suspended",
+              });
+              return;
+            }
+            // No other accounts — full reset with error
             set({
               ...initialState,
               hasHydrated: get().hasHydrated,
@@ -393,7 +459,33 @@ export const useAuthStore = create<AuthStore>()(
             return;
           }
 
-          // Token invalid/expired — clear everything
+          // Token invalid/expired — clear only the current user session
+          // but preserve other accounts if this is a multi-account scenario
+          const stateBeforeError = get();
+          if (stateBeforeError.accounts.length > 0) {
+            // Remove only the failed account from accounts
+            const remainingAccounts = stateBeforeError.accounts.filter(
+              (acc) => acc.user.id !== stateBeforeError.user?.id,
+            );
+            if (remainingAccounts.length > 0) {
+              // Switch to the first remaining account
+              const nextAccount = remainingAccounts[0];
+              set({
+                user: nextAccount.user,
+                accessToken: nextAccount.accessToken,
+                permissions: nextAccount.permissions,
+                pages: nextAccount.pages,
+                landingPage: nextAccount.landingPage,
+                accounts: remainingAccounts,
+                hasHydrated: get().hasHydrated,
+                isProcessing: false,
+                error: null,
+              });
+              return;
+            }
+          }
+
+          // No other accounts — full reset
           set({ ...initialState, hasHydrated: get().hasHydrated });
         }
       },
