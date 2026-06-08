@@ -4,10 +4,11 @@
 -->
 
 <div align="center">
-  <img src="public/logo.png" alt="Kolab Logo" width="140" height="auto" style="margin-bottom: 20px;" />
+  <img src="public/logo.png" alt="Kolab Logo" width="240" height="auto" style="margin-bottom: 20px;" />
   <h1>Kolab</h1>
   <p><strong>Smart Project & Task Collaboration System</strong></p>
   <p><em>Empower Your Team, Simplify Your Projects, and Track Work in Real-Time</em></p>
+  <img src="https://cdn.kolab.ahsanull.com/system/og-image.png" alt="Kolab Logo" width="full" height="auto" style="margin-bottom: 20px;" />
 
   <!-- Badges -->
   <p>
