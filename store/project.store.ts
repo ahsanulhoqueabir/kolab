@@ -68,7 +68,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   fetchProjects: async (filters = {}) => {
     const page = filters.page || 1;
-    const pageSize = filters.pageSize || 3;
+    const pageSize = filters.pageSize || 20;
     const filterHash = hashFilters(filters as Record<string, unknown>);
     const cacheKey = `${filterHash}|p${page}|s${pageSize}`;
     const state = get();

@@ -73,7 +73,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   fetchTasks: async (filters = {}) => {
     const page = filters.page || 1;
-    const pageSize = filters.pageSize || 10;
+    const pageSize = filters.pageSize || 20;
     const filterHash = hashFilters(filters as Record<string, unknown>);
     const cacheKey = `${filterHash}|p${page}|s${pageSize}`;
     const state = get();
